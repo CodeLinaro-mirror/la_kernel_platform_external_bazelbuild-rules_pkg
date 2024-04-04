@@ -16,7 +16,7 @@
 All interfaces are subject to change at any time.
 """
 
-load("@rules_python//python:defs.bzl", "py_library")
+load("@rules_python//python:defs.bzl", "py_binary")
 
 package(default_applicable_licenses = ["//:license"])
 
@@ -48,6 +48,7 @@ exports_files(
 py_binary(
     name = "build_zip",
     srcs = ["build_zip.py"],
+    imports = ["../../.."],
     python_version = "PY3",
     srcs_version = "PY3",
     visibility = ["//visibility:public"],

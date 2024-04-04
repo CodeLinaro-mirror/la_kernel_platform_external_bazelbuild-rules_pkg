@@ -5,7 +5,7 @@ common: &common
 
 tasks:
   centos7:
-    platform: centos7
+    platform: centos7_java11_devtoolset10
     <<: *common
   ubuntu1804:
     platform: ubuntu1804
@@ -20,5 +20,5 @@ tasks:
     name: bzlmod
     platform: ubuntu1804
     build_flags:
-      - "--experimental_enable_bzlmod"
+      - "--enable_bzlmod"
     <<: *common

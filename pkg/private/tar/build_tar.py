@@ -26,7 +26,7 @@ from pkg.private.tar import tar_writer
 
 
 def normpath(path):
-  """Normalize a path to the format we need it.
+  r"""Normalize a path to the format we need it.
 
   os.path.normpath changes / to \ on windows, but tarfile needs / style paths.
 
@@ -70,7 +70,14 @@ class TarFile(object):
     # No path should ever come in with slashs on either end, but protect
     # against that anyway.
     dest = dest.strip('/')
-    if self.directory:
+    # This prevents a potential problem for users with both a prefix_dir and
+    # symlinks that also repeat the prefix_dir. The old behavior was that we
+    # would get just the symlink path. Now we are prefixing with the prefix,
+    # so you get the file in the wrong place.
+    # We silently de-dup that. If people come up with a real use case for
+    # the /a/b/a/b/rest... output we can start an issue and come up with a
+    # solution at that time.
+    if self.directory and not dest.startswith(self.directory):
       dest = self.directory + dest
     return dest
 
@@ -293,7 +300,7 @@ class TarFile(object):
             gname=names[1])
 
   def add_manifest_entry(self, entry, file_attributes):
-    # Use the pkg_tar mode/owner remaping as a fallback
+    # Use the pkg_tar mode/owner remapping as a fallback
     non_abs_path = entry.dest.strip('/')
     if file_attributes:
       attrs = file_attributes(non_abs_path)
@@ -308,14 +315,19 @@ class TarFile(object):
       else:
         # Use group that legacy tar process would assign
         attrs['names'] = (entry.user, attrs.get('names')[1])
+    if entry.uid is not None:
+      if entry.gid is not None:
+        attrs['ids'] = (entry.uid, entry.gid)
+      else:
+        attrs['ids'] = (entry.uid, entry.uid)
     if entry.type == manifest.ENTRY_IS_LINK:
       self.add_link(entry.dest, entry.src, **attrs)
     elif entry.type == manifest.ENTRY_IS_DIR:
-      self.add_empty_dir(entry.dest, **attrs)
+      self.add_empty_dir(self.normalize_path(entry.dest), **attrs)
     elif entry.type == manifest.ENTRY_IS_TREE:
       self.add_tree(entry.src, entry.dest, **attrs)
     elif entry.type == manifest.ENTRY_IS_EMPTY_FILE:
-      self.add_empty_file(entry.dest, **attrs)
+      self.add_empty_file(self.normalize_path(entry.dest), **attrs)
     else:
       self.add_file(entry.src, entry.dest, **attrs)
 

@@ -14,14 +14,16 @@
 # -*- coding: utf-8 -*-
 """Tests for pkg_tar."""
 
+load("@rules_python//python:defs.bzl", "py_binary", "py_test")
+
 # buildifier: disable=bzl-visibility
-load("//pkg:mappings.bzl", "pkg_files", "pkg_mklink", "strip_prefix")
+load("//pkg:mappings.bzl", "pkg_attributes", "pkg_files", "pkg_mkdirs", "pkg_mklink")
 load("//pkg:verify_archive.bzl", "verify_archive_test")
+
+# buildifier: disable=bzl-visibility
 load("//pkg/private/tar:tar.bzl", "SUPPORTED_TAR_COMPRESSIONS", "pkg_tar")
 load("//tests:my_package_name.bzl", "my_package_naming")
 load("//tests/util:defs.bzl", "directory", "fake_artifact", "link_tree")
-load("@rules_python//python:defs.bzl", "py_test")
-load("@bazel_skylib//rules:copy_file.bzl", "copy_file")
 
 package(
     default_applicable_licenses = ["//:license"],
@@ -44,11 +46,12 @@ py_test(
         "//tests:testdata/tar_test.tar.xz",
         "//tests:testdata/test_tar_package_dir_file.txt",
     ],
+    imports = ["../.."],
     python_version = "PY3",
     srcs_version = "PY3",
     deps = [
         "//pkg/private/tar:tar_writer",
-        "@bazel_tools//tools/python/runfiles",
+        "@rules_python//python/runfiles",
     ],
 )
 
@@ -105,10 +108,18 @@ pkg_tar(
     package_variables = ":my_package_variables",
 )
 
+pkg_mkdirs(
+    name = "mydir",
+    dirs = [
+        "mydir",
+    ],
+)
+
 pkg_tar(
     name = "test_tar_package_dir_substitution",
     srcs = [
         ":BUILD",
+        ":mydir",
     ],
     package_dir = "level1/{label}/level3",
     package_variables = ":my_package_variables",
@@ -123,8 +134,8 @@ pkg_mklink(
 pkg_tar(
     name = "test_tar_package_dir",
     srcs = [
-        ":mylink",
         ":etc/nsswitch.conf",
+        ":mylink",
     ],
     package_dir = "/my/package",
 )
@@ -165,7 +176,6 @@ pkg_tar(
 
 [pkg_tar(
     name = "test-tar-inclusion-%s" % ext,
-    build_tar = "//pkg/private/tar:build_tar",
     deps = [
         ":test-tar-basic-%s" % ext,
         ":test_tar_naming",
@@ -199,7 +209,7 @@ pkg_tar(
     name = "test-tar-strip_prefix-dot",
     srcs = [
         ":etc/nsswitch.conf",
-        "@bazel_tools//tools/python/runfiles",
+        "@rules_python//python/runfiles",
     ],
     strip_prefix = ".",
 )
@@ -268,21 +278,21 @@ pkg_tar(
 
 verify_archive_test(
     name = "repackaging_long_filename_test",
-    target = ":test-tar-repackaging-long-filename",
+    max_size = 2,
     must_contain = [
         "can_i_repackage_a_file_with_a_long_name/file_with_a_ridiculously_long_name_consectetur_adipiscing_elit_fusce_laoreet_lorem_neque_sed_pharetra_erat.txt",
+    ],
+    must_contain_regex = [
+        ".*can_i_repackage_a_file_with_a_long_name/$",
     ],
     # there is really no need for these cases. I just want to use all the test capabilities.
     must_not_contain = [
         "i_am_not here",
     ],
-    must_contain_regex = [
-        ".*can_i_repackage_a_file_with_a_long_name/$",
-    ],
     must_not_contain_regex = [
         "^five.is.right.out",
     ],
-    max_size = 2,
+    target = ":test-tar-repackaging-long-filename",
 )
 
 pkg_tar(
@@ -315,14 +325,117 @@ fake_artifact(
     name = "a_program",
     files = ["//tests:testdata/executable.sh"],
     runfiles = ["BUILD"],
+    executable = True,
 )
 
 pkg_tar(
     name = "test-tar-with-runfiles",
     srcs = [
         ":a_program",
+        "//tests:an_executable",
     ],
     include_runfiles = True,
+)
+
+verify_archive_test(
+    name = "runfiles_test",
+    target = ":test-tar-with-runfiles",
+    must_contain = [
+        "a_program",
+        "a_program.runfiles/tests/tar/BUILD",
+        "executable.sh",
+    ] + select({
+        "@platforms//os:windows": [
+            "an_executable.exe",
+            "an_executable.exe.runfiles/tests/foo.cc",
+            "an_executable.exe.runfiles/tests/an_executable.exe",
+            "an_executable.exe.runfiles/tests/testdata/hello.txt",
+        ],
+        "//conditions:default": [
+            "an_executable",
+            "an_executable.runfiles/tests/foo.cc",
+            "an_executable.runfiles/tests/an_executable",
+            "an_executable.runfiles/tests/testdata/hello.txt",
+        ]
+    }),
+)
+
+pkg_tar(
+    name = "test-tar-remap-runfiles-base-path",
+    srcs = [
+        ":a_program",
+        "//tests:an_executable",
+    ],
+    include_runfiles = True,
+    remap_paths = {
+        "/a_program": "/new_name",
+        "/an_executable": "/other/different_name",
+    },
+)
+
+verify_archive_test(
+    name = "runfiles_remap_base_path_test",
+    must_contain = [
+        "new_name",
+        "new_name.runfiles/tests/tar/BUILD",
+        "executable.sh",
+    ] + select({
+        "@platforms//os:windows": [
+            "other/different_name.exe",
+            "other/different_name.exe.runfiles/tests/foo.cc",
+            "other/different_name.exe.runfiles/tests/an_executable.exe",
+            "other/different_name.exe.runfiles/tests/testdata/hello.txt",
+        ],
+        "//conditions:default": [
+            "other/different_name",
+            "other/different_name.runfiles/tests/foo.cc",
+            "other/different_name.runfiles/tests/an_executable",
+            "other/different_name.runfiles/tests/testdata/hello.txt",
+        ],
+    }),
+    target = ":test-tar-remap-runfiles-base-path",
+)
+
+pkg_tar(
+    name = "test-tar-remap-runfiles-full-paths",
+    srcs = [
+        ":a_program",
+        "//tests:an_executable",
+    ],
+    include_runfiles = True,
+    remap_paths = {
+        # rename the entire runfiles directory
+        "/a_program.runfiles/": "/a/program/runfiles/",
+        # rename a specific file
+        "/an_executable.runfiles/tests/testdata/hello.txt": "/myfiles/hello.txt",
+        "/an_executable.exe.runfiles/tests/testdata/hello.txt": "/myfiles/hello.txt",
+        # rename a specific subdirectory
+        "/an_executable.runfiles/tests/": "/mytests/",
+        "/an_executable.exe.runfiles/tests/": "/mytests/",
+    },
+)
+
+verify_archive_test(
+    name = "runfiles_remap_full_paths_test",
+    must_contain = [
+        "a_program",
+        "a/program/runfiles/tests/tar/BUILD",
+        "executable.sh",
+    ] + select({
+        "@platforms//os:windows": [
+            "an_executable.exe",
+            "mytests/foo.cc",
+            "mytests/an_executable.exe",
+            "myfiles/hello.txt",
+        ],
+        "//conditions:default": [
+            "an_executable",
+            "mytests/foo.cc",
+            "mytests/an_executable",
+            "myfiles/hello.txt",
+        ],
+    }),
+    target = ":test-tar-remap-runfiles-full-paths",
 )
 
 pkg_tar(
@@ -340,23 +453,25 @@ py_test(
         "pkg_tar_test.py",
     ],
     data = [
+        ":test-pkg-tar-from-pkg-files-with-attributes",
+        ":test-pkg-tar-with-attributes",
+        ":test-remap-paths-tree-artifact",
         ":test-tar-empty_dirs.tar",
         ":test-tar-empty_files.tar",
         ":test-tar-files_dict.tar",
+        ":test-tar-long-filename",
         ":test-tar-mtime.tar",
+        ":test-tar-repackaging-long-filename.tar",
         ":test-tar-strip_prefix-dot.tar",
         ":test-tar-strip_prefix-empty.tar",
         ":test-tar-strip_prefix-etc.tar",
         ":test-tar-strip_prefix-none.tar",
         ":test-tar-strip_prefix-substring.tar",
-        ":test_tar_leading_dotslash",
-        ":test_tar_package_dir_substitution.tar",
-        ":test-tar-long-filename",
-        ":test-tar-repackaging-long-filename.tar",
         ":test-tar-tree-artifact",
         ":test-tar-tree-artifact-noroot",
-        ":test-tar-with-runfiles",
         ":test-tree-input-with-strip-prefix",
+        ":test_tar_leading_dotslash",
+        ":test_tar_package_dir_substitution.tar",
         "//tests:testdata/tar_test.tar",
         "//tests:testdata/tar_test.tar.bz2",
         "//tests:testdata/tar_test.tar.gz",
@@ -369,10 +484,11 @@ py_test(
         ":test-tar-inclusion-%s" % compression
         for compression in SUPPORTED_TAR_COMPRESSIONS
     ],
+    imports = ["../.."],
     python_version = "PY3",
     deps = [
         "//pkg/private/tar:tar_writer",
-        "@bazel_tools//tools/python/runfiles",
+        "@rules_python//python/runfiles",
     ],
 )
 
@@ -395,6 +511,37 @@ pkg_tar(
         "//tests:testdata/loremipsum.txt",
     ],
     extension = ".tar.gz",
+)
+
+pkg_files(
+    name = "test-pkg-files-with-attributes",
+    srcs = [
+        "//tests:testdata/loremipsum.txt",
+    ],
+    attributes = pkg_attributes(
+        gid = 1000,
+        group = "grp",
+        mode = "0440",
+        uid = 0,
+        user = "person",
+    ),
+    prefix = "/foo/bar",
+)
+
+pkg_tar(
+    name = "test-pkg-tar-from-pkg-files-with-attributes",
+    srcs = [
+        ":test-pkg-files-with-attributes",
+    ],
+)
+
+pkg_tar(
+    name = "test-pkg-tar-with-attributes",
+    srcs = [
+        "//tests:testdata/loremipsum.txt",
+    ],
+    owner = "0.1000",
+    package_dir = "/foo/bar",
 )
 
 pkg_tar(
@@ -424,52 +571,7 @@ py_test(
     python_version = "PY3",
     srcs_version = "PY3",
     deps = [
-        "@bazel_tools//tools/python/runfiles",
-    ],
-)
-
-link_tree(
-    name = "node_modules",
-    links = {
-        "foo": ".pnpm/foo@1.0.0/node_modules/foo",
-        ".pnpm/bar@1.0.0/node_modules/bar": "STORE/bar",
-        ".pnpm/foo@1.0.0/node_modules/foo": "STORE/foo",
-        ".pnpm/foo@1.0.0/node_modules/bar": "../../bar@1.0.0/node_modules/bar",
-    },
-    package_dir = "node_modules",
-)
-
-directory(
-    name = "tree_artifact_with_links",
-    contents = "hello there",
-    filenames = [
-        "foo/hello.txt",
-        "foo/bar/baz",
-    ],
-    links = {
-        "foo/bar/hello": "../hello.txt",
-        "foo/bar/alt_baz": "baz",
-        "foo/alt_baz": "bar/baz",
-    },
-)
-
-# This target has symlinks 3 ways.
-# - mklinks rules.
-# - source files that are symlinks
-# - tree artifacts
-pkg_tar(
-    name = "relative_links_tar",
-    srcs = [
-        ":node_modules",
-        ":tree_artifact_with_links",
-        "//tests:file_and_link",
-    ],
-)
-
-pkg_tar(
-    name = "relative_links_re_tar",
-    deps = [
-        ":relative_links_tar",
+        "@rules_python//python/runfiles",
     ],
 )
 
@@ -489,4 +591,122 @@ pkg_tar(
         ":generate_tree_with_prefix",
     ],
     strip_prefix = "tree_prefix_to_strip",
+)
+
+directory(
+    name = "tree_artifact_to_rename",
+    contents = "hello there",
+    filenames = [
+        "a",
+        "rename_me/should_not_rename",
+    ],
+    outdir = "rename_me",
+)
+
+pkg_tar(
+    name = "test-remap-paths-tree-artifact",
+    srcs = [
+        ":tree_artifact_to_rename",
+    ],
+    remap_paths = {
+        "/rename_me": "a_new_name",
+    },
+)
+
+#
+# Test with symlinks
+#
+
+link_tree(
+    name = "node_modules",
+    links = {
+        "foo": ".pnpm/foo@1.0.0/node_modules/foo",
+        ".pnpm/bar@1.0.0/node_modules/bar": "STORE/bar",
+        ".pnpm/foo@1.0.0/node_modules/foo": "STORE/foo",
+        ".pnpm/foo@1.0.0/node_modules/bar": "../../bar@1.0.0/node_modules/bar",
+    },
+    package_dir = "node_modules",
+)
+
+directory(
+    name = "tree_artifact_with_links",
+    contents = "hello there",
+    filenames = [
+        "foo/hello.txt",
+        "foo/bar/baz",
+    ],
+    # TODO(https://github.com/bazelbuild/rules_pkg/issues/750)
+    #links = {
+    #    "foo/bar/hello": "../hello.txt",
+    #    "foo/bar/alt_baz": "baz",
+    #    "foo/alt_baz": "bar/baz",
+    #},
+)
+
+# This target has symlinks 3 ways.
+# - mklinks rules.
+# - source files that are symlinks
+# - tree artifacts
+pkg_tar(
+    name = "relative_links_tar",
+    srcs = [
+        ":node_modules",
+        ":tree_artifact_with_links",
+        "//tests:file_and_link",
+    ],
+    symlinks = {
+        "tree_artifact/toss_in_another": "/foo",
+    },
+)
+
+verify_archive_test(
+    name = "relative_links_test",
+    min_size = 10,
+    must_contain = [
+        "BUILD",
+        "outer_BUILD",
+        "node_modules/.pnpm/bar@1.0.0/node_modules/bar",
+    ],
+    tags = ["nowindows"],
+    target = ":relative_links_tar",
+    verify_links = {
+        "node_modules/.pnpm/foo@1.0.0/node_modules/bar": "../../bar@1.0.0/node_modules/bar",
+        "tree_artifact/toss_in_another": "/foo",
+    },
+)
+
+pkg_tar(
+    name = "relative_links_re_tar",
+    package_dir = "new/base",
+    symlinks = {
+        # We expect package_dir to apply to this
+        "tree_artifact/toss_in_another": "some_target",
+        # But we protect the user from duplicating package_dir in their
+        # link. That was the old behavior of symlink.
+        "new/base/something/this": "that",
+    },
+    deps = [
+        ":relative_links_tar",
+    ],
+)
+
+verify_archive_test(
+    name = "relative_links_re_test",
+    min_size = 10,
+    must_contain = [
+        "new/base/BUILD",
+        "new/base/outer_BUILD",
+        "new/base/node_modules/.pnpm/bar@1.0.0/node_modules/bar",
+    ],
+    must_not_contain = [
+        "BUILD",
+        "new/base/new/base/something/this",
+    ],
+    tags = ["nowindows"],
+    target = ":relative_links_re_tar",
+    verify_links = {
+        "new/base/node_modules/.pnpm/foo@1.0.0/node_modules/bar": "../../bar@1.0.0/node_modules/bar",
+        "new/base/tree_artifact/toss_in_another": "some_target",
+        "new/base/something/this": "that",
+    },
 )
