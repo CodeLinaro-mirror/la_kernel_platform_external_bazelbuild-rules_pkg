@@ -29,10 +29,7 @@ def setup_output_files(ctx, package_file_name = None, default_output_file = None
     Callers should:
        - write to `output_file`
        - add `outputs` to their returned `DefaultInfo(files)` provider
-       - return a `PackageArtifactInfo` provider of the form:
-            label: `ctx.label.name`
-            file: `output_file`
-            file_name: `output_name`
+       - Possibly add a distinguishing element to OutputGroups
 
     Args:
       ctx: rule context
@@ -85,5 +82,14 @@ def substitute_package_variables(ctx, attribute_value):
 
     # Map $(var) to {x} and then use format for substitution.
     # This is brittle and I hate it. We should have template substitution
-    # in the Starlark runtime.
-    return attribute_value.replace("$(", "{").replace(")", "}").format(**vars)
+    # in the Starlark runtime.  This loop compensates for mismatched counts
+    # of $(foo) so that we don't try replace things like (bar) because we
+    # have no regex matching
+    for _ in range(attribute_value.count("$(")):
+        if attribute_value.find(")") == -1:
+            fail("mismatched variable declaration")
+
+        attribute_value = attribute_value.replace("$(", "{", 1)
+        attribute_value = attribute_value.replace(")", "}", 1)
+
+    return attribute_value.format(**vars)

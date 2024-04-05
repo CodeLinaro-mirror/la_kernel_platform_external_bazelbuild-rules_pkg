@@ -14,8 +14,8 @@
 
 """Example rules to show package naming techniques."""
 
-load("@rules_pkg//pkg:providers.bzl", "PackageVariablesInfo")
 load("@rules_cc//cc:find_cc_toolchain.bzl", "find_cc_toolchain")
+load("@rules_pkg//pkg:providers.bzl", "PackageVariablesInfo")
 
 def _basic_naming_impl(ctx):
     values = {}
@@ -71,12 +71,12 @@ def _names_from_toolchains_impl(ctx):
     return PackageVariablesInfo(values = values)
 
 #
-# Extracting variables from the toolchain to use in the pacakge name.
+# Extracting variables from the toolchain to use in the package name.
 #
 names_from_toolchains = rule(
     implementation = _names_from_toolchains_impl,
     # Going forward, the preferred way to depend on a toolchain through the
-    # toolchains atttribute. The current C++ toolchains, however, are still not
+    # toolchains attribute. The current C++ toolchains, however, are still not
     # using toolchain resolution, so we have to depend on the toolchain
     # directly.
     # TODO(https://github.com/bazelbuild/bazel/issues/7260): Delete the
@@ -97,6 +97,7 @@ names_from_toolchains = rule(
 #
 def _name_part_from_command_line_naming_impl(ctx):
     values = {"name_part": ctx.build_setting_value}
+
     # Just pass the value from the command line through. An implementation
     # could also perform validation, such as done in
     # https://github.com/bazelbuild/bazel-skylib/blob/master/rules/common_settings.bzl
