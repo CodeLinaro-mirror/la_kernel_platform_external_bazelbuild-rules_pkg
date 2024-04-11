@@ -12,16 +12,18 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+"""
+Extract the paths to the various outputs of pkg_deb
 
-# Extract the paths to the various outputs of pkg_deb
-#
-# Usage:
-#   bazel cquery //pkg:deb --output=starlark --starlark:file=show_all_outputs.bzl
-#
+Usage:
+  bazel cquery //pkg:deb --output=starlark --starlark:file=show_all_outputs.bzl
+"""
 
+# buildifier: disable=function-docstring
 def format(target):
     provider_map = providers(target)
     output_group_info = provider_map["OutputGroupInfo"]
+
     # Look at the attributes of the provider. Visit the depsets.
     ret = []
     for attr in dir(output_group_info):

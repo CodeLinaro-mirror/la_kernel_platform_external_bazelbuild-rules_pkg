@@ -12,9 +12,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+load("@rules_pkg//pkg/private:make_starlark_library.bzl", "starlark_library")
+
 # -*- coding: utf-8 -*-
 load("@rules_python//python:defs.bzl", "py_binary", "py_library")
-load("@rules_pkg//pkg/private:make_starlark_library.bzl", "starlark_library")
 
 package(default_applicable_licenses = ["//:license"])
 
@@ -38,6 +39,7 @@ filegroup(
     srcs = glob([
         "*.bzl",
         "*.py",
+        "*.tpl",
     ]) + [
         "BUILD",
         "//pkg/legacy:standard_package",
@@ -67,6 +69,7 @@ starlark_library(
 py_binary(
     name = "make_rpm",
     srcs = ["make_rpm.py"],
+    imports = [".."],
     python_version = "PY3",
     srcs_version = "PY3",
     target_compatible_with = select({
@@ -83,6 +86,7 @@ py_binary(
 py_library(
     name = "make_rpm_lib",
     srcs = ["make_rpm.py"],
+    imports = [".."],
     srcs_version = "PY3",
     visibility = [
         "//experimental:__subpackages__",
@@ -101,10 +105,9 @@ py_binary(
     visibility = ["//visibility:public"],
 )
 
-# This might be public, but use at your own risk
 py_library(
-    name = "verify_archive_test_lib",
-    srcs = ["verify_archive_test_lib.py"],
+    name = "filter_directory_lib",
+    srcs = ["filter_directory.py"],
     srcs_version = "PY3",
     visibility = ["//visibility:public"],
 )

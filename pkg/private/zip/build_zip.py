@@ -15,7 +15,9 @@
 
 import argparse
 import datetime
+import logging
 import os
+import sys
 import zipfile
 
 from pkg.private import build_info
@@ -24,9 +26,10 @@ from pkg.private import manifest
 ZIP_EPOCH = 315532800
 
 # Unix dir bit and Windows dir bit. Magic from zip spec
-UNIX_DIR_BIT = 0o40000
-MSDOS_DIR_BIT = 0x10
+UNIX_FILE_BIT =    0o100000
 UNIX_SYMLINK_BIT = 0o120000
+UNIX_DIR_BIT  =    0o040000
+MSDOS_DIR_BIT = 0x10
 
 def _create_argument_parser():
   """Creates the command line arg parser."""
@@ -46,6 +49,12 @@ def _create_argument_parser():
   parser.add_argument(
       '-m', '--mode',
       help='The file system mode to use for files added into the zip.')
+  parser.add_argument(
+      '-c', '--compression_type',
+      help='The compression type to use')
+  parser.add_argument(
+      '-l', '--compression_level',
+      help='The compression level to use')
   parser.add_argument('--manifest',
                       help='manifest of contents to add to the layer.',
                       required=True)
@@ -71,7 +80,7 @@ def parse_date(ts):
 
 class ZipWriter(object):
 
-  def __init__(self, output_path: str, time_stamp: int, default_mode: int):
+  def __init__(self, output_path: str, time_stamp: int, default_mode: int, compression_type: str, compression_level: int):
     """Create a writer.
 
     You must close() after use or use in a 'with' statement.
@@ -84,7 +93,15 @@ class ZipWriter(object):
     self.output_path = output_path
     self.time_stamp = time_stamp
     self.default_mode = default_mode
-    self.zip_file = zipfile.ZipFile(self.output_path, mode='w')
+    compressions = {
+      "deflated": zipfile.ZIP_DEFLATED,
+      "lzma": zipfile.ZIP_LZMA,
+      "bzip2": zipfile.ZIP_BZIP2,
+      "stored": zipfile.ZIP_STORED
+    }
+    self.compression_type = compressions[compression_type]
+    self.compression_level = compression_level
+    self.zip_file = zipfile.ZipFile(self.output_path, mode='w', compression=self.compression_type)
 
   def __enter__(self):
     return self
@@ -95,6 +112,15 @@ class ZipWriter(object):
   def close(self):
     self.zip_file.close()
     self.zip_file = None
+
+  def writestr(self, entry_info, content: str, compresslevel: int):
+    if sys.version_info >= (3, 7):
+      self.zip_file.writestr(entry_info, content, compresslevel=compresslevel)
+    else:
+      # Python 3.6 and lower don't support compresslevel
+      self.zip_file.writestr(entry_info, content)
+      if compresslevel != 6:
+        logging.warn("Custom compresslevel is not supported with python < 3.7")
 
   def make_zipinfo(self, path: str, mode: str):
     """Create a Zipinfo.
@@ -134,17 +160,18 @@ class ZipWriter(object):
     user = entry.user
     group = entry.group
 
-    # Use the pkg_tar mode/owner remaping as a fallback
+    # Use the pkg_tar mode/owner remapping as a fallback
     dst_path = dest.strip('/')
     if entry_type == manifest.ENTRY_IS_DIR and not dst_path.endswith('/'):
       dst_path += '/'
     entry_info = self.make_zipinfo(path=dst_path, mode=mode)
 
     if entry_type == manifest.ENTRY_IS_FILE:
-      entry_info.compress_type = zipfile.ZIP_DEFLATED
+      entry_info.compress_type = self.compression_type
       # Using utf-8 for the file names is for python <3.7 compatibility.
+      entry_info.external_attr |= UNIX_FILE_BIT << 16
       with open(src.encode('utf-8'), 'rb') as src_content:
-        self.zip_file.writestr(entry_info, src_content.read())
+        self.writestr(entry_info, src_content.read(), compresslevel=self.compression_level)
     elif entry_type == manifest.ENTRY_IS_DIR:
       entry_info.compress_type = zipfile.ZIP_STORED
       # Set directory bits
@@ -158,7 +185,7 @@ class ZipWriter(object):
     elif entry_type == manifest.ENTRY_IS_TREE:
       self.add_tree(src, dst_path, mode)
     elif entry_type == manifest.ENTRY_IS_EMPTY_FILE:
-      entry_info.compress_type = zipfile.ZIP_DEFLATED
+      entry_info.compress_type = zipfile.ZIP_STORED
       self.zip_file.writestr(entry_info, '')
     else:
       raise Exception('Unknown type for manifest entry:', entry)
@@ -213,9 +240,9 @@ class ZipWriter(object):
         else:
           f_mode = mode
         entry_info = self.make_zipinfo(path=path, mode=f_mode)
-        entry_info.compress_type = zipfile.ZIP_DEFLATED
+        entry_info.compress_type = self.compression_type
         with open(content_path, 'rb') as src:
-          self.zip_file.writestr(entry_info, src.read())
+          self.writestr(entry_info, src.read(), compresslevel=self.compression_level)
       else:
         # Implicitly created directory
         dir_path = path
@@ -251,6 +278,8 @@ def _load_manifest(prefix, manifest_path):
               mode = "0o755",
               user =  None,
               group = None,
+              uid = None,
+              gid = None,
               origin = "parent directory of {}".format(manifest_map[dest].origin),
             )
 
@@ -264,10 +293,11 @@ def main(args):
   default_mode = None
   if args.mode:
     default_mode = int(args.mode, 8)
+  compression_level = int(args.compression_level)
 
   manifest = _load_manifest(args.directory, args.manifest)
   with ZipWriter(
-      args.output, time_stamp=ts, default_mode=default_mode) as zip_out:
+      args.output, time_stamp=ts, default_mode=default_mode, compression_type=args.compression_type, compression_level=compression_level) as zip_out:
     for entry in manifest:
       zip_out.add_manifest_entry(entry)
 

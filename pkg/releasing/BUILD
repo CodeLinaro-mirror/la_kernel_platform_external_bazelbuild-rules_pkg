@@ -1,5 +1,4 @@
 load("@rules_python//python:defs.bzl", "py_binary", "py_library", "py_test")
-load("git.bzl", "git_changelog")
 
 package(
     default_applicable_licenses = ["//:license"],
@@ -19,8 +18,7 @@ package(
 
 filegroup(
     name = "standard_package",
-    srcs = glob([
-        "BUILD",
+    srcs = ["BUILD"] + glob([
         "*.bzl",
         "*.py",
     ]),
@@ -36,6 +34,7 @@ py_library(
         "__init__.py",
         "release_tools.py",
     ],
+    imports = ["../.."],
     srcs_version = "PY3",
 )
 
@@ -44,6 +43,7 @@ py_binary(
     srcs = [
         "print_rel_notes.py",
     ],
+    imports = ["../.."],
     python_version = "PY3",
     deps = [
         ":release_utils",

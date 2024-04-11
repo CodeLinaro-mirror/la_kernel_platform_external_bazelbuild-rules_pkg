@@ -15,10 +15,11 @@
 import datetime
 import filecmp
 import os
+import sys
 import unittest
 import zipfile
 
-from bazel_tools.tools.python.runfiles import runfiles
+from python.runfiles import runfiles
 from tests.zip import zip_test_lib
 
 HELLO_CRC = 2069210904
@@ -122,6 +123,33 @@ class ZipContentsTests(zip_test_lib.ZipContentsTestBase):
         {"filename": "generate_tree/b/d"},
         {"filename": "generate_tree/b/e"},
     ])
+
+  def test_compression_deflated(self):
+    if sys.version_info >= (3, 7):
+      self.assertZipFileContent("test_zip_deflated_level_3.zip", [
+            {"filename": "loremipsum.txt", "crc": LOREM_CRC, "size": 312},
+      ])
+    else:
+      # Python 3.6 doesn't support setting compresslevel, so the file size differs
+      self.assertZipFileContent("test_zip_deflated_level_3.zip", [
+            {"filename": "loremipsum.txt", "crc": LOREM_CRC, "size": 309},
+      ])
+
+  def test_compression_bzip2(self):
+    self.assertZipFileContent("test_zip_bzip2.zip", [
+          {"filename": "loremipsum.txt", "crc": LOREM_CRC, "size": 340},
+    ])
+
+  def test_compression_lzma(self):
+    self.assertZipFileContent("test_zip_lzma.zip", [
+          {"filename": "loremipsum.txt", "crc": LOREM_CRC, "size": 378},
+    ])
+
+  def test_compression_stored(self):
+    self.assertZipFileContent("test_zip_stored.zip", [
+          {"filename": "loremipsum.txt", "crc": LOREM_CRC, "size": 543},
+    ])
+
 
 
 if __name__ == "__main__":
