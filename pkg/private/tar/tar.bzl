@@ -13,8 +13,7 @@
 # limitations under the License.
 """Rules for making .tar files."""
 
-load("//pkg:path.bzl", "compute_data_path", "dest_path")
-load("//pkg:providers.bzl", "PackageArtifactInfo", "PackageVariablesInfo")
+load("//pkg:providers.bzl", "PackageVariablesInfo")
 load(
     "//pkg/private:pkg_files.bzl",
     "add_directory",
@@ -22,8 +21,7 @@ load(
     "add_label_list",
     "add_single_file",
     "add_symlink",
-    "add_tree_artifact",
-    "process_src",
+    "create_mapping_context_from_ctx",
     "write_manifest",
 )
 load("//pkg/private:util.bzl", "setup_output_files", "substitute_package_variables")
@@ -58,15 +56,7 @@ def _pkg_tar_impl(ctx):
 
     # Files needed by rule implementation at runtime
     files = []
-
-    outputs, output_file, output_name = setup_output_files(ctx)
-
-    # Compute the relative path
-    data_path = compute_data_path(ctx, ctx.attr.strip_prefix)
-    data_path_without_prefix = compute_data_path(ctx, ".")
-
-    # Find a list of path remappings to apply.
-    remap_paths = ctx.attr.remap_paths
+    outputs, output_file, _ = setup_output_files(ctx)
 
     # Start building the arguments.
     args = ctx.actions.args()
@@ -112,61 +102,6 @@ def _pkg_tar_impl(ctx):
         args.add("--mtime", "%d" % ctx.attr.mtime)
     if ctx.attr.portable_mtime:
         args.add("--mtime", "portable")
-
-    # Now we begin processing the files.
-    file_deps = []  # inputs we depend on
-    content_map = {}  # content handled in the manifest
-
-    # Start with all the pkg_* inputs
-    for src in ctx.attr.srcs:
-        if not process_src(
-            content_map,
-            file_deps,
-            src = src,
-            origin = src.label,
-            default_mode = None,
-            default_user = None,
-            default_group = None,
-        ):
-            src_files = src[DefaultInfo].files.to_list()
-            if ctx.attr.include_runfiles:
-                runfiles = src[DefaultInfo].default_runfiles
-                if runfiles:
-                    file_deps.append(runfiles.files)
-                    src_files.extend(runfiles.files.to_list())
-
-            # Add in the files of srcs which are not pkg_* types
-            for f in src_files:
-                d_path = dest_path(f, data_path, data_path_without_prefix)
-                if f.is_directory:
-                    add_tree_artifact(content_map, d_path, f, src.label)
-                else:
-                    # Note: This extra remap is the bottleneck preventing this
-                    # large block from being a utility method as shown below.
-                    # Should we disallow mixing pkg_files in srcs with remap?
-                    # I am fine with that if it makes the code more readable.
-                    dest = _remap(remap_paths, d_path)
-                    add_single_file(content_map, dest, f, src.label)
-
-    # TODO(aiuto): I want the code to look like this, but we don't have lambdas.
-    # transform_path = lambda f: _remap(
-    #    remap_paths, dest_path(f, data_path, data_path_without_prefix))
-    # add_label_list(ctx, content_map, file_deps, ctx.attr.srcs, transform_path)
-
-    # The files attribute is a map of labels to destinations. We can add them
-    # directly to the content map.
-    for target, f_dest_path in ctx.attr.files.items():
-        target_files = target.files.to_list()
-        if len(target_files) != 1:
-            fail("Each input must describe exactly one file.", attr = "files")
-        file_deps.append(depset([target_files[0]]))
-        add_single_file(
-            content_map,
-            f_dest_path,
-            target_files[0],
-            target.label,
-        )
-
     if ctx.attr.modes:
         for key in ctx.attr.modes:
             args.add("--modes", "%s=%s" % (_quote(key), ctx.attr.modes[key]))
@@ -179,15 +114,48 @@ def _pkg_tar_impl(ctx):
                 "--owner_names",
                 "%s=%s" % (_quote(key), ctx.attr.ownernames[key]),
             )
+
+    # Now we begin processing the files.
+    path_mapper = None
+    if ctx.attr.remap_paths:
+        path_mapper = lambda path: _remap(ctx.attr.remap_paths, path)
+
+    mapping_context = create_mapping_context_from_ctx(
+        ctx,
+        label = ctx.label,
+        include_runfiles = ctx.attr.include_runfiles,
+        strip_prefix = ctx.attr.strip_prefix,
+        # build_tar does the default modes. Consider moving attribute mapping
+        # into mapping_context.
+        default_mode = None,
+        path_mapper = path_mapper,
+    )
+
+    add_label_list(mapping_context, srcs = ctx.attr.srcs)
+
+    # The files attribute is a map of labels to destinations. We can add them
+    # directly to the content map.
+    for target, f_dest_path in ctx.attr.files.items():
+        target_files = target.files.to_list()
+        if len(target_files) != 1:
+            fail("Each input must describe exactly one file.", attr = "files")
+        mapping_context.file_deps.append(depset([target_files[0]]))
+        add_single_file(
+            mapping_context,
+            f_dest_path,
+            target_files[0],
+            target.label,
+        )
+
     for empty_file in ctx.attr.empty_files:
-        add_empty_file(content_map, empty_file, ctx.label)
+        add_empty_file(mapping_context, empty_file, ctx.label)
     for empty_dir in ctx.attr.empty_dirs or []:
-        add_directory(content_map, empty_dir, ctx.label)
+        add_directory(mapping_context, empty_dir, ctx.label)
     for f in ctx.files.deps:
         args.add("--tar", f.path)
     for link in ctx.attr.symlinks:
         add_symlink(
-            content_map,
+            mapping_context,
             link,
             ctx.attr.symlinks[link],
             ctx.label,
@@ -199,20 +167,23 @@ def _pkg_tar_impl(ctx):
 
     manifest_file = ctx.actions.declare_file(ctx.label.name + ".manifest")
     files.append(manifest_file)
-    write_manifest(ctx, manifest_file, content_map)
+    write_manifest(ctx, manifest_file, mapping_context.content_map)
     args.add("--manifest", manifest_file.path)
 
     args.set_param_file_format("flag_per_line")
     args.use_param_file("@%s", use_always = False)
 
-    inputs = depset(direct = ctx.files.deps + files, transitive = file_deps)
+    inputs = depset(
+        direct = ctx.files.deps + files,
+        transitive = mapping_context.file_deps,
+    )
 
     ctx.actions.run(
         mnemonic = "PackageTar",
         progress_message = "Writing: %s" % output_file.path,
         inputs = inputs,
         tools = [ctx.executable.compressor] if ctx.executable.compressor else [],
-        executable = ctx.executable.build_tar,
+        executable = ctx.executable._build_tar,
         arguments = [args],
         outputs = [output_file],
         env = {
@@ -233,12 +204,7 @@ def _pkg_tar_impl(ctx):
         # or this OutputGroup might be totally removed.
         # Depend on it at your own risk!
         OutputGroupInfo(
-            manifest = [manifest_file], 
-        ),
-        PackageArtifactInfo(
-            label = ctx.label.name,
-            file = output_file,
-            file_name = output_name,
+            manifest = [manifest_file],
         ),
     ]
 
@@ -246,37 +212,73 @@ def _pkg_tar_impl(ctx):
 pkg_tar_impl = rule(
     implementation = _pkg_tar_impl,
     attrs = {
-        "strip_prefix": attr.string(),
+        "strip_prefix": attr.string(
+            doc = """(note: Use strip_prefix = "." to strip path to the package but preserve relative paths of sub directories beneath the package.)""",
+        ),
         "package_dir": attr.string(
-            doc = """Prefix to be prepend to all paths written."""
+            doc = """Prefix to be prepend to all paths written.
+
+            This is applied as a final step, while writing to the archive.
+            Any other attributes (e.g. symlinks) which specify a path, must do so relative to package_dir.
+            The value may contain variables. See [package_file_name](#package_file_name) for examples.
+            """,
         ),
         "package_dir_file": attr.label(allow_single_file = True),
-        "deps": attr.label_list(allow_files = tar_filetype),
-        "srcs": attr.label_list(allow_files = True),
-        "files": attr.label_keyed_string_dict(allow_files = True),
+        "deps": attr.label_list(
+            doc = """tar files which will be unpacked and repacked into the archive.""",
+            allow_files = tar_filetype,
+        ),
+        "srcs": attr.label_list(
+            doc = """Inputs which will become part of the tar archive.""",
+            allow_files = True,
+        ),
+        "files": attr.label_keyed_string_dict(
+            doc = """Obsolete. Do not use.""",
+            allow_files = True,
+        ),
         "mode": attr.string(default = "0555"),
         "modes": attr.string_dict(),
         "mtime": attr.int(default = _DEFAULT_MTIME),
         "portable_mtime": attr.bool(default = True),
-        "owner": attr.string(default = "0.0"),
+        "owner": attr.string(
+            doc = """Default numeric owner.group to apply to files when not set via pkg_attributes.""",
+            default = "0.0",
+        ),
         "ownername": attr.string(default = "."),
         "owners": attr.string_dict(),
         "ownernames": attr.string_dict(),
         "extension": attr.string(default = "tar"),
         "symlinks": attr.string_dict(),
         "empty_files": attr.string_list(),
-        "include_runfiles": attr.bool(),
+        "include_runfiles": attr.bool(
+            doc = ("""Include runfiles for executables. These appear as they would in bazel-bin."""
+                   + """For example: 'path/to/myprog.runfiles/path/to/my_data.txt'."""),
+        ),
         "empty_dirs": attr.string_list(),
         "remap_paths": attr.string_dict(),
-        "compressor": attr.label(executable = True, cfg = "exec"),
-        "compressor_args": attr.string(),
+        "compressor": attr.label(
+            doc = """External tool which can compress the archive.""",
+            executable = True,
+            cfg = "exec",
+        ),
+        "compressor_args": attr.string(
+            doc = """Arg list for `compressor`.""",
+        ),
 
         # Common attributes
         "out": attr.output(mandatory = True),
-        "package_file_name": attr.string(doc = "See Common Attributes"),
+        "package_file_name": attr.string(doc = "See [Common Attributes](#package_file_name)"),
         "package_variables": attr.label(
-            doc = "See Common Attributes",
+            doc = "See [Common Attributes](#package_variables)",
             providers = [PackageVariablesInfo],
+        ),
+        "allow_duplicates_with_different_content": attr.bool(
+            default = True,
+            doc = """If true, will allow you to reference multiple pkg_* which conflict
+(writing different content or metadata to the same destination).
+Such behaviour is always incorrect, but we provide a flag to support it in case old
+builds were accidentally doing it. Never explicitly set this to true for new code.
+""",
         ),
         "stamp": attr.int(
             doc = """Enable file time stamping.  Possible values:
@@ -292,21 +294,22 @@ pkg_tar_impl = rule(
         "private_stamp_detect": attr.bool(default = False),
 
         # Implicit dependencies.
-        "build_tar": attr.label(
+        "_build_tar": attr.label(
             default = Label("//pkg/private/tar:build_tar"),
             cfg = "exec",
             executable = True,
             allow_files = True,
         ),
     },
-    provides = [PackageArtifactInfo],
 )
 
+# buildifier: disable=function-docstring-args
 def pkg_tar(name, **kwargs):
     """Creates a .tar file. See pkg_tar_impl.
 
     @wraps(pkg_tar_impl)
     """
+
     # Compatibility with older versions of pkg_tar that define files as
     # a flat list of labels.
     if "srcs" not in kwargs:

@@ -13,13 +13,14 @@
 # limitations under the License.
 # -*- coding: utf-8 -*-
 
+load("@rules_cc//cc:defs.bzl", "cc_binary", "cc_library")
 load("@rules_python//python:defs.bzl", "py_test")
-load(":my_package_name.bzl", "my_package_naming")
-load(":path_test.bzl", "path_tests")
 load("//pkg:deb.bzl", "pkg_deb")
 load("//pkg:mappings.bzl", "pkg_attributes", "pkg_files", "strip_prefix")
 load("//pkg:tar.bzl", "pkg_tar")
 load("//pkg:zip.bzl", "pkg_zip")
+load(":my_package_name.bzl", "my_package_naming")
+load(":path_test.bzl", "path_tests")
 
 package(
     default_applicable_licenses = ["//:license"],
@@ -75,19 +76,20 @@ py_test(
         "archive_test.py",
     ],
     data = [
-        "//tests:testdata/empty.ar",
-        "//tests:testdata/a_ab.ar",
         "//tests:testdata/a.ar",
-        "//tests:testdata/a_b_ab.ar",
+        "//tests:testdata/a_ab.ar",
         "//tests:testdata/a_b.ar",
+        "//tests:testdata/a_b_ab.ar",
         "//tests:testdata/ab.ar",
         "//tests:testdata/b.ar",
+        "//tests:testdata/empty.ar",
     ],
+    imports = [".."],
     python_version = "PY3",
     srcs_version = "PY3",
     deps = [
         "//pkg/private:archive",
-        "@bazel_tools//tools/python/runfiles",
+        "@rules_python//python/runfiles",
     ],
 )
 
@@ -99,15 +101,32 @@ py_test(
     srcs_version = "PY3",
 )
 
+cc_library(
+    name = "liba",
+    srcs = ["a.cc"],
+    data = ["testdata/hello.txt"],
+)
+
+cc_library(
+    name = "libb",
+    srcs = ["b.cc"],
+    data = ["testdata/hello.txt"],
+)
+
 cc_binary(
     name = "an_executable",
     srcs = ["foo.cc"],
-    data = ["BUILD"],
+    data = ["foo.cc"],
+    deps = [
+        ":liba",
+        ":libb",
+    ],
 )
 
 py_test(
     name = "helpers_test",
     srcs = ["helpers_test.py"],
+    imports = [".."],
     python_version = "PY3",
     srcs_version = "PY3",
     deps = [
@@ -189,7 +208,7 @@ py_test(
     ],
     python_version = "PY3",
     deps = [
-        "@bazel_tools//tools/python/runfiles",
+        "@rules_python//python/runfiles",
     ],
 )
 

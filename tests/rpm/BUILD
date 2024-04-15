@@ -124,6 +124,50 @@ pkg_filegroup(
 )
 
 ############################################################################
+# scriptlets for testing
+############################################################################
+
+_POST_SCRIPTLET = "echo post"
+_POSTUN_SCRIPTLET = "echo postun"
+_PRE_SCRIPTLET = "echo pre"
+_PREUN_SCRIPTLET = "echo preun"
+_POSTTRANS_SCRIPTLET = "echo posttrans"
+
+[
+    genrule(
+        name = name,
+        outs = ["{}.sh".format(name)],
+        cmd = "echo '{}' > $@".format(content),
+    )
+    for name, content in [
+        ("post", _POST_SCRIPTLET),
+        ("postun", _POSTUN_SCRIPTLET),
+        ("pre", _PRE_SCRIPTLET),
+        ("preun", _PREUN_SCRIPTLET),
+        ("posttrans", _POSTTRANS_SCRIPTLET),
+    ]
+]
+
+############################################################################
+# versionfile for testing
+############################################################################
+
+_VERSION = "1.1.1"
+_RELEASE = "2222"
+
+genrule(
+    name = "version_file",
+    outs = ["version"],
+    cmd = "echo '{}' > $@".format(_VERSION),
+)
+
+genrule(
+    name = "release_file",
+    outs = ["release"],
+    cmd = "echo '{}' > $@".format(_RELEASE),
+)
+
+############################################################################
 # Test RPMs
 ############################################################################
 
@@ -136,22 +180,23 @@ pkg_rpm(
     conflicts = ["not-a-test"],
     description = """pkg_rpm test rpm description""",
     license = "Apache 2.0",
-    post_scriptlet = """echo post""",
-    postun_scriptlet = """echo postun""",
-    pre_scriptlet = """echo pre""",
-    preun_scriptlet = """echo preun""",
+    post_scriptlet = _POST_SCRIPTLET,
+    postun_scriptlet = _POSTUN_SCRIPTLET,
+    pre_scriptlet = _PRE_SCRIPTLET,
+    preun_scriptlet = _PREUN_SCRIPTLET,
+    posttrans_scriptlet = _POSTTRANS_SCRIPTLET,
     provides = ["test"],
-    release = "2222",
+    release = _RELEASE,
     requires = ["test-lib > 1.0"],
     requires_contextual = {"preun": ["bash"]},
     spec_template = "template-test.spec.tpl",
     summary = "pkg_rpm test rpm summary",
-    version = "1.1.1",
+    version = _VERSION,
 )
 
 # Just like the above one, except the compression is changed.
 pkg_rpm(
-    name = "test_rpm-bzip2",
+    name = "test_rpm_bzip2",
     srcs = [
         ":test_pfg",
     ],
@@ -160,17 +205,18 @@ pkg_rpm(
     conflicts = ["not-a-test"],
     description = """pkg_rpm test rpm description""",
     license = "Apache 2.0",
-    post_scriptlet = """echo post""",
-    postun_scriptlet = """echo postun""",
-    pre_scriptlet = """echo pre""",
-    preun_scriptlet = """echo preun""",
+    post_scriptlet = _POST_SCRIPTLET,
+    postun_scriptlet = _POSTUN_SCRIPTLET,
+    pre_scriptlet = _PRE_SCRIPTLET,
+    preun_scriptlet = _PREUN_SCRIPTLET,
+    posttrans_scriptlet = _POSTTRANS_SCRIPTLET,
     provides = ["test"],
-    release = "2222",
+    release = _RELEASE,
     requires = ["test-lib > 1.0"],
     requires_contextual = {"preun": ["bash"]},
     spec_template = "template-test.spec.tpl",
     summary = "pkg_rpm test rpm summary",
-    version = "1.1.1",
+    version = _VERSION,
 )
 
 # Like the first one, except `srcs` is now passed in without using a
@@ -187,17 +233,66 @@ pkg_rpm(
     conflicts = ["not-a-test"],
     description = """pkg_rpm test rpm description""",
     license = "Apache 2.0",
-    post_scriptlet = """echo post""",
-    postun_scriptlet = """echo postun""",
-    pre_scriptlet = """echo pre""",
-    preun_scriptlet = """echo preun""",
+    post_scriptlet = _POST_SCRIPTLET,
+    postun_scriptlet = _POSTUN_SCRIPTLET,
+    pre_scriptlet = _PRE_SCRIPTLET,
+    preun_scriptlet = _PREUN_SCRIPTLET,
+    posttrans_scriptlet = _POSTTRANS_SCRIPTLET,
+    provides = ["test"],
+    release = _RELEASE,
+    requires = ["test-lib > 1.0"],
+    requires_contextual = {"preun": ["bash"]},
+    spec_template = "template-test.spec.tpl",
+    summary = "pkg_rpm test rpm summary",
+    version = _VERSION,
+)
+
+# Like the first one, except we use files for scriptlets
+pkg_rpm(
+    name = "test_rpm_scriptlets_files",
+    srcs = [
+        ":test_pfg",
+    ],
+    architecture = "noarch",
+    conflicts = ["not-a-test"],
+    description = """pkg_rpm test rpm description""",
+    license = "Apache 2.0",
+    post_scriptlet_file = ":post",
+    postun_scriptlet_file = ":postun",
+    pre_scriptlet_file = ":pre",
+    preun_scriptlet_file = ":preun",
+    posttrans_scriptlet_file = ":posttrans",
     provides = ["test"],
     release = "2222",
     requires = ["test-lib > 1.0"],
     requires_contextual = {"preun": ["bash"]},
     spec_template = "template-test.spec.tpl",
     summary = "pkg_rpm test rpm summary",
-    version = "1.1.1",
+    version = _VERSION,
+)
+
+# Like the first one, except we use release and version files
+pkg_rpm(
+    name = "test_rpm_release_version_files",
+    srcs = [
+        ":test_pfg",
+    ],
+    architecture = "noarch",
+    conflicts = ["not-a-test"],
+    description = """pkg_rpm test rpm description""",
+    license = "Apache 2.0",
+    post_scriptlet_file = ":post",
+    postun_scriptlet_file = ":postun",
+    pre_scriptlet_file = ":pre",
+    preun_scriptlet_file = ":preun",
+    posttrans_scriptlet_file = ":posttrans",
+    provides = ["test"],
+    release_file = ":release_file",
+    requires = ["test-lib > 1.0"],
+    requires_contextual = {"preun": ["bash"]},
+    spec_template = "template-test.spec.tpl",
+    summary = "pkg_rpm test rpm summary",
+    version_file = ":version_file",
 )
 
 ############################################################################
@@ -285,6 +380,7 @@ genrule(
         # NOTE: excludes 'rpmlib' requires that may be version-dependent
         echo 'capability:sense'
         # Common, automatically generated
+        echo '/bin/sh:interp,posttrans'
         echo '/bin/sh:pre,interp'
         echo '/bin/sh:post,interp'
         echo '/bin/sh:preun,interp'
@@ -305,10 +401,12 @@ sh_library(
     testonly = True,
     srcs = [
         ":test_rpm",
-        ":test_rpm-bzip2",
+        ":test_rpm_bzip2",
         ":test_rpm_direct",
         ":test_rpm_manifest",
         ":test_rpm_metadata",
+        ":test_rpm_scriptlets_files",
+        ":test_rpm_release_version_files",
     ],
 )
 
@@ -373,6 +471,7 @@ diff_test(
 py_library(
     name = "rpm_util",
     srcs = ["rpm_util.py"],
+    imports = ["../.."],
     visibility = [":__subpackages__"],
 )
 

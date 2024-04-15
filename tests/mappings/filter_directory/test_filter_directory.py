@@ -24,20 +24,8 @@ import sys
 import tempfile
 import unittest
 
-from rules_python.python.runfiles import runfiles
-
-# Get the filter_directory script into the import path.  There might be a
-# better way to do this, but it works.
-
-rf = runfiles.Create()
-filter_directory_script = rf.Rlocation('/'.join([
-    os.environ["TEST_WORKSPACE"],
-    "pkg",
-    "filter_directory"
-]))
-
-sys.path.append(os.path.dirname(filter_directory_script))
-import filter_directory  # noqa: E402
+from pkg import filter_directory
+from python.runfiles import runfiles
 
 
 # TODO: These tests are largely to ensure that filter_directory fails, but it
@@ -109,7 +97,7 @@ class FilterDirectoryInternalTest(unittest.TestCase):
     def test_invalid_prefixes(self):
         self.assertFilterDirectoryFails(
             prefix="/absolute/path",
-            message="--prefix with aboslute paths should be rejected",
+            message="--prefix with absolute paths should be rejected",
         )
 
         self.assertFilterDirectoryFails(

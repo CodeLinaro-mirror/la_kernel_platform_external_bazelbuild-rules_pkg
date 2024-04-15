@@ -14,11 +14,8 @@
 
 """Tests for file mapping routines in pkg/mappings.bzl"""
 
-load("@bazel_skylib//lib:new_sets.bzl", "sets")
-load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts", "unittest")
-load(":mappings_test.bzl", "pkg_files_contents_test")
-load("//pkg:providers.bzl", "PackageFilegroupInfo", "PackageFilesInfo")
 load("//pkg:mappings.bzl", "pkg_files", "strip_prefix")
+load(":mappings_test.bzl", "pkg_files_contents_test")
 
 ##########
 # pkg_files tests involving external repositories
@@ -109,6 +106,7 @@ def _test_pkg_files_extrepo():
         expected_dests = ["usr/bin/dir/extproj.sh"],
     )
 
+# buildifier: disable=unnamed-macro
 def mappings_external_repo_analysis_tests():
     """Declare mappings.bzl analysis tests"""
     _test_pkg_files_extrepo()
@@ -133,5 +131,10 @@ def mappings_external_repo_analysis_tests():
             # The main purpose behind it is to verify cases wherein we build a
             # file, but then have it consumed by some remote package.
             "@mappings_test_external_repo//pkg:pf_local_file_in_extrepo",
+            # This test is more focused around the verify_archive_test repo but is still
+            # based on using someting from another repo. In particular, ensuring the
+            # verify_archive_test macro can be called properly from a workspace outside
+            # of the main one.
+            "@mappings_test_external_repo//pkg:external_archive_test",
         ],
     )
