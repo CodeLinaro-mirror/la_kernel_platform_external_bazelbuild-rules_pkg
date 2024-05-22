@@ -13,9 +13,9 @@
 # limitations under the License.
 
 load("@rules_python//python:defs.bzl", "py_test")
-load(":defs.bzl", "inspect_directory_test")
 load("//pkg:mappings.bzl", "filter_directory")
 load("//tests/util:defs.bzl", "directory")
+load(":defs.bzl", "inspect_directory_test")
 
 # TODO: the below tests only check for rule success and confirmation that
 # directory structure matches expectations.  A more thorough test implementation
@@ -227,7 +227,9 @@ directory(
 py_test(
     name = "negative_tests",
     srcs = ["test_filter_directory.py"],
-    data = ["//pkg:filter_directory"],
     main = "test_filter_directory.py",
-    deps = ["@rules_python//python/runfiles"],
+    deps = [
+        "//pkg:filter_directory_lib",
+        "@rules_python//python/runfiles",
+    ],
 )

@@ -14,6 +14,7 @@
 
 """Tests for RPM generation analysis"""
 
+load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
 load(
     "//pkg:mappings.bzl",
     "pkg_filegroup",
@@ -21,10 +22,9 @@ load(
     "pkg_mkdirs",
     "pkg_mklink",
 )
-load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts")
-load("//pkg:providers.bzl", "PackageArtifactInfo", "PackageVariablesInfo")
+load("//pkg:providers.bzl", "PackageVariablesInfo")
 load("//pkg:rpm.bzl", "pkg_rpm")
-load("//tests/util:defs.bzl", "directory", "generic_base_case_test", "generic_negative_test")
+load("//tests/util:defs.bzl", "generic_base_case_test", "generic_negative_test")
 
 def _declare_pkg_rpm(name, srcs_ungrouped, tags = None, **kwargs):
     pfg_name = "{}_pfg".format(name)
@@ -49,7 +49,7 @@ def _declare_pkg_rpm(name, srcs_ungrouped, tags = None, **kwargs):
         **kwargs
     )
 
-def _declare_conflicts_test(name, srcs, **kwargs):
+def _declare_conflicts_test(name, srcs):
     rpm_name = name + "_rpm"
     _declare_pkg_rpm(
         name = rpm_name,
@@ -167,46 +167,53 @@ def _package_naming_test_impl(ctx):
     env = analysistest.begin(ctx)
     target_under_test = analysistest.target_under_test(env)
 
-    pai = target_under_test[PackageArtifactInfo]
+    ogi = target_under_test[OutputGroupInfo]
 
-    pai_file = pai.file
-    pai_name = pai.file_name
+    out_file = ogi.out.to_list()[0]
+    rpm_file = ogi.rpm.to_list()[0]
+    changes_file = ogi.changes.to_list()[0] if ogi.changes else None
     asserts.equals(
         env,
-        pai_name,
+        rpm_file.basename,
         ctx.attr.expected_name,
-        "PackageArtifactInfo file name does not match expected value.",
+        "OutputGroupInfo rpm name does not match expected value.",
     )
 
-    # Try to find the expected files in the DefaultInfo.  We have to look for
-    # them; PackageArtifactInfo only gives a file name, not a File structure.
-    packaged_file = None
-    packaged_file_found = False
+    # Try to find the expected files in the DefaultInfo.
+    out_file_found = False
+    rpm_file_found = False
+    changes_file_found = False
     default_name_found = False
+
     for f in target_under_test[DefaultInfo].files.to_list():
-        if f == pai.file:
-            packaged_file_found = True
-        if f.basename == pai_name:
-            packaged_file = f
-        elif f.basename == ctx.attr.expected_default_name and not default_name_found:
+        if f == out_file:
+            out_file_found = True
+        if f == rpm_file:
+            rpm_file_found = True
+        if f == changes_file:
+            changes_file_found = True
+        if f.basename == ctx.attr.expected_name:
             default_name_found = True
 
     asserts.true(
         env,
-        packaged_file != None,
-        "File name mentioned in PackageArtifactInfo '{}' is not in DefaultInfo".format(pai_name),
+        rpm_file_found,
+        "rpm component of OutputGroupInfo '{}' is not in DefaultInfo".format(rpm_file),
     )
-
-    asserts.true(
+    asserts.false(
         env,
-        packaged_file_found,
-        "File object mentioned in PackageArtifactInfo '{}' missing from DefaultInfo".format(pai_name),
+        out_file_found,
+        "out component of OutputGroupInfo '{}' is not in DefaultInfo".format(out_file),
     )
-
+    asserts.false(
+        env,
+        changes_file_found,
+        "changes component of OutputGroupInfo '{}' is not in DefaultInfo".format(changes_file),
+    )
     asserts.true(
         env,
         default_name_found,
-        "Expected package file with default name '{}' is not in DefaultInfo".format(ctx.attr.expected_default_name),
+        "Expected package file with default name '{}' is not in DefaultInfo".format(ctx.attr.expected_name),
     )
 
     return analysistest.end(env)
@@ -215,12 +222,11 @@ package_naming_test = analysistest.make(
     _package_naming_test_impl,
     attrs = {
         "expected_name": attr.string(),
-        "expected_default_name": attr.string(),
     },
 )
 
 # Dummy substitution set, used in below test cases
-def _dummy_pkg_variables_impl(ctx):
+def _dummy_pkg_variables_impl(_):
     return [
         PackageVariablesInfo(
             values = {
@@ -239,7 +245,7 @@ dummy_pkg_variables = rule(
 
 def _test_naming(name):
     # Test whether name templating via PackageVariablesInfo functions as expected, and ensure that
-    # outputs are passed through to PackageArtifactsInfo.
+    # outputs are passed through to OutputGroupInfo.
     pkg_files(
         name = "{}_file_base".format(name),
         srcs = ["foo"],
@@ -256,7 +262,6 @@ def _test_naming(name):
         name = name + "_no_extra",
         target_under_test = ":" + name + "_no_extra_rpm",
         expected_name = name + "_no_extra_rpm-1.0-1.noarch.rpm",
-        expected_default_name = name + "_no_extra_rpm" + ".rpm",
     )
 
     ##################################################
@@ -280,7 +285,6 @@ def _test_naming(name):
         name = name + "_with_different_name",
         target_under_test = ":" + name + "_with_different_name_rpm",
         expected_name = name + "-foo-bar.rpm",
-        expected_default_name = name + "_with_different_name_rpm" + ".rpm",
     )
 
     ##################################################
@@ -298,7 +302,7 @@ def _test_naming(name):
         ],
     )
 
-def analysis_tests(name, **kwargs):
+def analysis_tests(name):
     # Need to test:
     #
     # - Mutual exclusivity of certain options (low priority)

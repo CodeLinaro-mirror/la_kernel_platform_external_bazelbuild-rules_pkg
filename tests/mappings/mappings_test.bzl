@@ -14,14 +14,9 @@
 
 """Tests for file mapping routines in pkg/mappings.bzl"""
 
+load("@bazel_skylib//lib:new_sets.bzl", "sets")
 load("@bazel_skylib//lib:unittest.bzl", "analysistest", "asserts", "unittest")
-load(
-    "//pkg:providers.bzl",
-    "PackageDirsInfo",
-    "PackageFilegroupInfo",
-    "PackageFilesInfo",
-    "PackageSymlinkInfo",
-)
+load("@rules_python//python:defs.bzl", "py_test")
 load(
     "//pkg:mappings.bzl",
     "REMOVE_BASE_DIRECTORY",
@@ -33,14 +28,19 @@ load(
     "strip_prefix",
 )
 load(
+    "//pkg:providers.bzl",
+    "PackageDirsInfo",
+    "PackageFilegroupInfo",
+    "PackageFilesInfo",
+    "PackageSymlinkInfo",
+)
+load(
     "//tests/util:defs.bzl",
     "directory",
     "fake_artifact",
     "generic_base_case_test",
     "generic_negative_test",
 )
-load("@bazel_skylib//lib:new_sets.bzl", "sets")
-load("@rules_python//python:defs.bzl", "py_test")
 
 ##########
 # Helpers
@@ -883,6 +883,7 @@ def _strip_prefix_test_impl(ctx):
 
 strip_prefix_test = unittest.make(_strip_prefix_test_impl)
 
+# buildifier: disable=unnamed-macro
 def mappings_analysis_tests():
     """Declare mappings.bzl analysis tests"""
     _test_pkg_files_contents()
@@ -969,6 +970,7 @@ _gen_manifest_test_main = rule(
     },
 )
 
+# buildifier: disable=function-docstring-args
 def manifest_golden_test(name, target, expected):
     """Tests that a content manifest file matches a golden copy.
 
