@@ -46,6 +46,8 @@ class TarFileWriter(object):
                name,
                compression='',
                compressor='',
+               create_parents=False,
+               allow_dups_from_deps=True,
                default_mtime=None,
                preserve_tar_mtimes=True):
     """TarFileWriter wraps tarfile.open().
@@ -106,6 +108,8 @@ class TarFileWriter(object):
     # we can adjust that here based on the setting of root_dirctory.
     self.directories.add('/')
     self.directories.add('./')
+    self.create_parents = create_parents
+    self.allow_dups_from_deps = allow_dups_from_deps
 
   def __enter__(self):
     return self
@@ -123,14 +127,15 @@ class TarFileWriter(object):
       # Enforce the ending / for directories so we correctly deduplicate.
       if not info.name.endswith('/'):
         info.name += '/'
-    if not self._have_added(info.name):
-      self.tar.addfile(info, fileobj)
-      self.members.add(info.name)
-      if info.type == tarfile.DIRTYPE:
-        self.directories.add(info.name)
-    elif info.type != tarfile.DIRTYPE:
-      print('Duplicate file in archive: %s, '
-            'picking first occurrence' % info.name)
+    if not self.allow_dups_from_deps and self._have_added(info.name):
+        print('Duplicate file in archive: %s, '
+              'picking first occurrence' % info.name)
+        return
+
+    self.tar.addfile(info, fileobj)
+    self.members.add(info.name)
+    if info.type == tarfile.DIRTYPE:
+      self.directories.add(info.name)
 
   def add_directory_path(self,
                          path,
@@ -152,7 +157,7 @@ class TarFileWriter(object):
       mode: unix permission mode of the file, default: 0755.
     """
     assert path[-1] == '/'
-    if not path or self._have_added(path):
+    if not path:
       return
     if _DEBUG_VERBOSITY > 1:
       print('DEBUG: adding directory', path)
@@ -166,12 +171,14 @@ class TarFileWriter(object):
     tarinfo.gname = gname
     self._addfile(tarinfo)
 
-  def add_parents(self, path, uid=0, gid=0, uname='', gname='', mtime=0, mode=0o755):
+  def conditionally_add_parents(self, path, uid=0, gid=0, uname='', gname='', mtime=0, mode=0o755):
     dirs = path.split('/')
     parent_path = ''
     for next_level in dirs[0:-1]:
       parent_path = parent_path + next_level + '/'
-      self.add_directory_path(
+
+      if self.create_parents and not self._have_added(parent_path):
+        self.add_directory_path(
           parent_path,
           uid=uid,
           gid=gid,
@@ -212,14 +219,14 @@ class TarFileWriter(object):
       return
     if name == '.':
       return
-    if name in self.members:
+    if not self.allow_dups_from_deps and name in self.members:
       return
 
     if mtime is None:
       mtime = self.default_mtime
 
     # Make directories up the file
-    self.add_parents(name, mtime=mtime, mode=0o755, uid=uid, gid=gid, uname=uname, gname=gname)
+    self.conditionally_add_parents(name, mtime=mtime, mode=0o755, uid=uid, gid=gid, uname=uname, gname=gname)
 
     tarinfo = tarfile.TarInfo(name)
     tarinfo.mtime = mtime
@@ -291,7 +298,7 @@ class TarFileWriter(object):
         if prefix:
           in_name = os.path.normpath(prefix + in_name).replace(os.path.sep, '/')
         tarinfo.name = in_name
-        self.add_parents(
+        self.conditionally_add_parents(
             path=tarinfo.name,
             mtime=tarinfo.mtime,
             mode=0o755,
