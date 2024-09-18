@@ -81,10 +81,9 @@ WROTE_FILE_RE = re.compile(r'Wrote: (?P<rpm_path>.+)', re.MULTILINE)
 
 def FindOutputFile(log):
   """Find the written file from the log information."""
-
-  m = WROTE_FILE_RE.search(log)
+  m = WROTE_FILE_RE.findall(log)
   if m:
-    return m.group('rpm_path')
+    return m
   return None
 
 def SlurpFile(input_path):
@@ -173,6 +172,7 @@ class RpmBuilder(object):
 
   SOURCE_DIR = 'SOURCES'
   BUILD_DIR = 'BUILD'
+  BUILD_SUBDIR = 'BUILD_SUB'
   BUILDROOT_DIR = 'BUILDROOT'
   TEMP_DIR = 'TMP'
   RPMS_DIR = 'RPMS'
@@ -187,7 +187,7 @@ class RpmBuilder(object):
     self.arch = arch
     self.files = []
     self.rpmbuild_path = FindRpmbuild(rpmbuild_path)
-    self.rpm_path = None
+    self.rpm_paths = None
     self.source_date_epoch = helpers.GetFlagValue(source_date_epoch)
     self.debug = debug
 
@@ -204,6 +204,7 @@ class RpmBuilder(object):
     self.post_scriptlet = None
     self.preun_scriptlet = None
     self.postun_scriptlet = None
+    self.subrpms = None
 
   def AddFiles(self, paths, root=''):
     """Add a set of files to the current RPM.
@@ -227,6 +228,7 @@ class RpmBuilder(object):
                    preamble_file=None,
                    description_file=None,
                    install_script_file=None,
+                   subrpms_file=None,
                    pre_scriptlet_path=None,
                    post_scriptlet_path=None,
                    preun_scriptlet_path=None,
@@ -258,15 +260,17 @@ class RpmBuilder(object):
 
     # Slurp in the scriptlets...
     self.pre_scriptlet = \
-      SlurpFile(os.path.join(original_dir, pre_scriptlet_path)) if pre_scriptlet_path is not None else ''
+      SlurpFile(os.path.join(original_dir, pre_scriptlet_path)) if pre_scriptlet_path else ''
     self.post_scriptlet = \
-      SlurpFile(os.path.join(original_dir, post_scriptlet_path)) if post_scriptlet_path is not None else ''
+      SlurpFile(os.path.join(original_dir, post_scriptlet_path)) if post_scriptlet_path else ''
     self.preun_scriptlet = \
-      SlurpFile(os.path.join(original_dir, preun_scriptlet_path)) if preun_scriptlet_path is not None else ''
+      SlurpFile(os.path.join(original_dir, preun_scriptlet_path)) if preun_scriptlet_path else ''
     self.postun_scriptlet = \
-      SlurpFile(os.path.join(original_dir, postun_scriptlet_path)) if postun_scriptlet_path is not None else ''
+      SlurpFile(os.path.join(original_dir, postun_scriptlet_path)) if postun_scriptlet_path else ''
     self.posttrans_scriptlet = \
-      SlurpFile(os.path.join(original_dir, posttrans_scriptlet_path)) if posttrans_scriptlet_path is not None else ''
+      SlurpFile(os.path.join(original_dir, posttrans_scriptlet_path)) if posttrans_scriptlet_path else ''
+    self.subrpms = \
+      SlurpFile(os.path.join(original_dir, subrpms_file)) if subrpms_file else ''
 
     # Then prepare for textual substitution.  This is typically only the case for the
     # experimental `pkg_rpm`.
@@ -276,6 +280,7 @@ class RpmBuilder(object):
       'PREUN_SCRIPTLET': ("%preun\n" + self.preun_scriptlet) if self.preun_scriptlet else "",
       'POSTUN_SCRIPTLET': ("%postun\n" + self.postun_scriptlet) if self.postun_scriptlet else "",
       'POSTTRANS_SCRIPTLET': ("%posttrans\n" + self.posttrans_scriptlet) if self.posttrans_scriptlet else "",
+      'SUBRPMS' : self.subrpms,
       'CHANGELOG': ""
     }
 
@@ -341,7 +346,7 @@ class RpmBuilder(object):
       shutil.copy(os.path.join(original_dir, file_list_path), RpmBuilder.BUILD_DIR)
       self.file_list_path = os.path.join(RpmBuilder.BUILD_DIR, os.path.basename(file_list_path))
 
-  def CallRpmBuild(self, dirname, rpmbuild_args):
+  def CallRpmBuild(self, dirname, rpmbuild_args, debuginfo_type):
     """Call rpmbuild with the correct arguments."""
 
     buildroot = os.path.join(dirname, RpmBuilder.BUILDROOT_DIR)
@@ -357,13 +362,31 @@ class RpmBuilder(object):
     if self.debug:
       args.append('-vv')
 
+    if debuginfo_type == "fedora40":
+      os.makedirs(f'{dirname}/{RpmBuilder.BUILD_DIR}/{RpmBuilder.BUILD_SUBDIR}')
+
     # Common options
+    # NOTE: There may be a need to add '--define', 'buildsubdir .' for some
+    # rpmbuild versions. But that breaks other rpmbuild versions, so before
+    # adding it back in, add extensive tests.
     args += [
-        '--define', '_topdir %s' % dirname,
-        '--define', '_tmppath %s/TMP' % dirname,
-        '--define', '_builddir %s/BUILD' % dirname,
-        '--bb',
-        '--buildroot=%s' % buildroot,
+      '--define', '_topdir %s' % dirname,
+      '--define', '_tmppath %s/TMP' % dirname,
+      '--define', '_builddir %s/BUILD' % dirname,
+    ]
+
+    if debuginfo_type in ["fedora40", "centos7", "centos9", "almalinux9.3"]:
+      args += ['--undefine', '_debugsource_packages']
+
+    if debuginfo_type in ["centos7", "centos9", "almalinux9.3"]:
+      args += ['--define', 'buildsubdir .']
+
+    if debuginfo_type == "fedora40":
+      args += ['--define', f'buildsubdir {RpmBuilder.BUILD_SUBDIR}']
+
+    args += [
+      '--bb',
+      '--buildroot=%s' % buildroot,
     ]  # yapf: disable
 
     # Macro-based RPM parameter substitution, if necessary inputs provided.
@@ -375,7 +398,11 @@ class RpmBuilder(object):
       args += ['--define', 'build_rpm_install %s' % self.install_script_file]
     if self.file_list_path:
       # %files -f is taken relative to the package root
-      args += ['--define', 'build_rpm_files %s' % os.path.basename(self.file_list_path)]
+      base_path = os.path.basename(self.file_list_path)
+      if debuginfo_type == "fedora40":
+        base_path = os.path.join("..", base_path)
+
+      args += ['--define', 'build_rpm_files %s' % base_path]
 
     args.extend(rpmbuild_args)
 
@@ -405,9 +432,9 @@ class RpmBuilder(object):
 
     if p.returncode == 0:
       # Find the created file.
-      self.rpm_path = FindOutputFile(output)
+      self.rpm_paths = FindOutputFile(output)
 
-    if p.returncode != 0 or not self.rpm_path:
+    if p.returncode != 0 or not self.rpm_paths:
       print('Error calling rpmbuild:')
       print(output)
     elif self.debug:
@@ -416,20 +443,35 @@ class RpmBuilder(object):
     # Return the status.
     return p.returncode
 
-  def SaveResult(self, out_file):
+  def SaveResult(self, out_file, subrpm_out_files):
     """Save the result RPM out of the temporary working directory."""
+    if self.rpm_paths:
+      for p in self.rpm_paths:
+         is_subrpm = False
 
-    if self.rpm_path:
-      shutil.copy(self.rpm_path, out_file)
-      if self.debug:
-        print('Saved RPM file to %s' % out_file)
+         for subrpm_name, subrpm_out_file in subrpm_out_files:
+            subrpm_prefix = self.name + '-' + subrpm_name
+
+            if os.path.basename(p).startswith(subrpm_prefix):
+               shutil.copy(p, subrpm_out_file)
+               is_subrpm = True
+               if self.debug or True:
+                  print('Saved %s sub RPM file to %s' % (
+                     subrpm_name, subrpm_out_file))
+               break
+
+         if not is_subrpm:
+            shutil.copy(p, out_file)
+            if self.debug or True:
+               print('Saved RPM file to %s' % out_file)
     else:
       print('No RPM file created.')
 
-  def Build(self, spec_file, out_file,
+  def Build(self, spec_file, out_file, subrpm_out_files=None,
             preamble_file=None,
             description_file=None,
             install_script_file=None,
+            subrpms_file=None,
             pre_scriptlet_path=None,
             post_scriptlet_path=None,
             preun_scriptlet_path=None,
@@ -437,7 +479,8 @@ class RpmBuilder(object):
             posttrans_scriptlet_path=None,
             file_list_path=None,
             changelog_file=None,
-            rpmbuild_args=None):
+            rpmbuild_args=None,
+            debuginfo_type=None):
     """Build the RPM described by the spec_file, with other metadata in keyword arguments"""
 
     if self.debug:
@@ -446,12 +489,21 @@ class RpmBuilder(object):
     original_dir = os.getcwd()
     spec_file = os.path.join(original_dir, spec_file)
     out_file = os.path.join(original_dir, out_file)
+
+    if subrpm_out_files:
+      subrpm_out_files = (s.split(':') for s in subrpm_out_files)
+      subrpm_out_files = [
+         (s[0], os.path.join(original_dir, s[1])) for s in subrpm_out_files]
+    else:
+      subrpm_out_files = []
+
     with Tempdir() as dirname:
       self.SetupWorkdir(spec_file,
                         original_dir,
                         preamble_file=preamble_file,
                         description_file=description_file,
                         install_script_file=install_script_file,
+                        subrpms_file=subrpms_file,
                         file_list_path=file_list_path,
                         pre_scriptlet_path=pre_scriptlet_path,
                         post_scriptlet_path=post_scriptlet_path,
@@ -459,8 +511,8 @@ class RpmBuilder(object):
                         postun_scriptlet_path=postun_scriptlet_path,
                         posttrans_scriptlet_path=posttrans_scriptlet_path,
                         changelog_file=changelog_file)
-      status = self.CallRpmBuild(dirname, rpmbuild_args or [])
-      self.SaveResult(out_file)
+      status = self.CallRpmBuild(dirname, rpmbuild_args or [], debuginfo_type)
+      self.SaveResult(out_file, subrpm_out_files)
 
     return status
 
@@ -483,6 +535,9 @@ def main(argv):
                       help='The file containing the RPM specification.')
   parser.add_argument('--out_file', required=True,
                       help='The destination to save the resulting RPM file to.')
+  parser.add_argument('--subrpm_out_file', action='append',
+                      help='List of destinations to save resulting ' +
+                      'Sub RPMs to in the form of name:destination')
   parser.add_argument('--rpmbuild', help='Path to rpmbuild executable.')
   parser.add_argument('--source_date_epoch',
                       help='Value for the SOURCE_DATE_EPOCH rpmbuild '
@@ -499,6 +554,8 @@ def main(argv):
                       help='File containing the RPM Preamble')
   parser.add_argument('--description',
                       help='File containing the RPM %description text')
+  parser.add_argument('--subrpms',
+                      help='File containing the RPM subrpm details')
   parser.add_argument('--pre_scriptlet',
                       help='File containing the RPM %pre scriptlet, if to be substituted')
   parser.add_argument('--post_scriptlet',
@@ -514,6 +571,8 @@ def main(argv):
 
   parser.add_argument('--rpmbuild_arg', dest='rpmbuild_args', action='append',
                       help='Any additional arguments to pass to rpmbuild')
+  parser.add_argument('--debuginfo_type', dest='debuginfo_type', default='none',
+                      help='debuginfo type to use (centos7, fedora40, or none)')
   parser.add_argument('files', nargs='*')
 
   options = parser.parse_args(argv or ())
@@ -526,9 +585,11 @@ def main(argv):
                          debug=options.debug)
     builder.AddFiles(options.files)
     return builder.Build(options.spec_file, options.out_file,
+                         options.subrpm_out_file,
                          preamble_file=options.preamble,
                          description_file=options.description,
                          install_script_file=options.install_script,
+                         subrpms_file=options.subrpms,
                          file_list_path=options.file_list,
                          pre_scriptlet_path=options.pre_scriptlet,
                          post_scriptlet_path=options.post_scriptlet,
@@ -536,7 +597,8 @@ def main(argv):
                          postun_scriptlet_path=options.postun_scriptlet,
                          posttrans_scriptlet_path=options.posttrans_scriptlet,
                          changelog_file=options.changelog,
-                         rpmbuild_args=options.rpmbuild_args)
+                         rpmbuild_args=options.rpmbuild_args,
+                         debuginfo_type=options.debuginfo_type)
   except NoRpmbuildFoundError:
     print('ERROR: rpmbuild is required but is not present in PATH')
     return 1
