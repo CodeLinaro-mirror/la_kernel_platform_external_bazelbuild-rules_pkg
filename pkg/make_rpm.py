@@ -446,23 +446,30 @@ class RpmBuilder(object):
   def SaveResult(self, out_file, subrpm_out_files):
     """Save the result RPM out of the temporary working directory."""
     if self.rpm_paths:
+      subrpms_seen = set()
+      sorted_subrpm_out_files = sorted(
+         subrpm_out_files, key=lambda n: len(n[1]), reverse=True)
+
       for p in self.rpm_paths:
          is_subrpm = False
 
-         for subrpm_name, subrpm_out_file in subrpm_out_files:
-            subrpm_prefix = self.name + '-' + subrpm_name
+         for subrpm_name, subrpm_out_file in sorted_subrpm_out_files:
+            if subrpm_name in subrpms_seen:
+               continue
 
+            subrpm_prefix = self.name + '-' + subrpm_name
             if os.path.basename(p).startswith(subrpm_prefix):
+               subrpms_seen.add(subrpm_name)
                shutil.copy(p, subrpm_out_file)
                is_subrpm = True
-               if self.debug or True:
+               if self.debug:
                   print('Saved %s sub RPM file to %s' % (
                      subrpm_name, subrpm_out_file))
                break
 
          if not is_subrpm:
             shutil.copy(p, out_file)
-            if self.debug or True:
+            if self.debug:
                print('Saved RPM file to %s' % out_file)
     else:
       print('No RPM file created.')
