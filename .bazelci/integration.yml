@@ -11,7 +11,4 @@ tasks:
   integration:
     name: rolling_distro
     platform: ubuntu1804
-    bazel: rolling
-    build_flags:
-    - "--noenable_bzlmod"
     <<: *common
