@@ -8,12 +8,12 @@ third_party {
   license_type: NOTICE
   last_upgrade_date {
     year: 2024
-    month: 8
-    day: 28
+    month: 9
+    day: 17
   }
   identifier {
     type: "Git"
     value: "https://github.com/bazelbuild/rules_pkg"
-    version: "4afd0b3ccd8379af11f67f7ddff525fd1a9c5834"
+    version: "25fd41cbe22f2ef108245c8dc7080d241de95c4f"
   }
 }
