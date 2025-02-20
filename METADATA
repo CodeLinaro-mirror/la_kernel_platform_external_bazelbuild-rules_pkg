@@ -7,13 +7,13 @@ description: "Bazel package building"
 third_party {
   license_type: NOTICE
   last_upgrade_date {
-    year: 2024
-    month: 9
-    day: 17
+    year: 2025
+    month: 2
+    day: 19
   }
   identifier {
     type: "Git"
     value: "https://github.com/bazelbuild/rules_pkg"
-    version: "25fd41cbe22f2ef108245c8dc7080d241de95c4f"
+    version: "5c6aec64627c91f8ae71820173766237311d4ac6"
   }
 }
