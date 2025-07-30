@@ -102,12 +102,12 @@ class TarFileWriter(object):
     self.name = name
 
     self.tar = tarfile.open(name=name, mode=mode, fileobj=self.fileobj,
-                            format=tarfile.GNU_FORMAT) 
+                            format=tarfile.GNU_FORMAT)
     self.members = set()
     self.directories = set()
     # Preseed the added directory list with things we should not add. If we
     # some day need to allow '.' or '/' as an explicit member of the archive,
-    # we can adjust that here based on the setting of root_dirctory.
+    # we can adjust that here based on the setting of root_directory.
     self.directories.add('/')
     self.directories.add('./')
     self.create_parents = create_parents
@@ -130,9 +130,12 @@ class TarFileWriter(object):
       if not info.name.endswith('/'):
         info.name += '/'
     if not self.allow_dups_from_deps and self._have_added(info.name):
+      # Directories with different contents should get merged without warnings.
+      # If they have overlapping content, the warning will be on their duplicate *files* instead
+      if info.type != tarfile.DIRTYPE:
         print('Duplicate file in archive: %s, '
               'picking first occurrence' % info.name)
-        return
+      return
 
     self.tar.addfile(info, fileobj)
     self.members.add(info.name)
@@ -344,4 +347,3 @@ class TarFileWriter(object):
     if self.compressor_proc and self.compressor_proc.wait() != 0:
       raise self.Error('Custom compression command '
                        '"{}" failed'.format(self.compressor_cmd))
-

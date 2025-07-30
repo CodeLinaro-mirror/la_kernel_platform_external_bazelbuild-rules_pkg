@@ -1,4 +1,4 @@
-# rules_pkg - 1.0.1
+# rules_pkg - 1.1.0
 
 <div class="toc">
   <h2>Common Attributes</h2>
@@ -90,6 +90,8 @@ Rule for creating Debian packages.
 ## pkg_deb
 
 <pre>
+load("@rules_pkg//pkg/private/deb:deb.bzl", "pkg_deb")
+
 pkg_deb(<a href="#pkg_deb-name">name</a>, <a href="#pkg_deb-data">data</a>, <a href="#pkg_deb-out">out</a>, <a href="#pkg_deb-architecture">architecture</a>, <a href="#pkg_deb-architecture_file">architecture_file</a>, <a href="#pkg_deb-breaks">breaks</a>, <a href="#pkg_deb-built_using">built_using</a>,
              <a href="#pkg_deb-built_using_file">built_using_file</a>, <a href="#pkg_deb-changelog">changelog</a>, <a href="#pkg_deb-conffiles">conffiles</a>, <a href="#pkg_deb-conffiles_file">conffiles_file</a>, <a href="#pkg_deb-config">config</a>, <a href="#pkg_deb-conflicts">conflicts</a>, <a href="#pkg_deb-depends">depends</a>,
              <a href="#pkg_deb-depends_file">depends_file</a>, <a href="#pkg_deb-description">description</a>, <a href="#pkg_deb-description_file">description_file</a>, <a href="#pkg_deb-distribution">distribution</a>, <a href="#pkg_deb-enhances">enhances</a>, <a href="#pkg_deb-homepage">homepage</a>, <a href="#pkg_deb-license">license</a>,
@@ -177,8 +179,10 @@ find_system_rpmbuild(name="rules_pkg_rpmbuild")
 ## pkg_sub_rpm
 
 <pre>
+load("@rules_pkg//pkg:rpm_pfg.bzl", "pkg_sub_rpm")
+
 pkg_sub_rpm(<a href="#pkg_sub_rpm-name">name</a>, <a href="#pkg_sub_rpm-srcs">srcs</a>, <a href="#pkg_sub_rpm-architecture">architecture</a>, <a href="#pkg_sub_rpm-conflicts">conflicts</a>, <a href="#pkg_sub_rpm-description">description</a>, <a href="#pkg_sub_rpm-epoch">epoch</a>, <a href="#pkg_sub_rpm-group">group</a>, <a href="#pkg_sub_rpm-obsoletes">obsoletes</a>, <a href="#pkg_sub_rpm-package_name">package_name</a>,
-            <a href="#pkg_sub_rpm-post_scriptlet">post_scriptlet</a>, <a href="#pkg_sub_rpm-provides">provides</a>, <a href="#pkg_sub_rpm-requires">requires</a>, <a href="#pkg_sub_rpm-summary">summary</a>, <a href="#pkg_sub_rpm-version">version</a>)
+            <a href="#pkg_sub_rpm-post_scriptlet">post_scriptlet</a>, <a href="#pkg_sub_rpm-postun_scriptlet">postun_scriptlet</a>, <a href="#pkg_sub_rpm-provides">provides</a>, <a href="#pkg_sub_rpm-requires">requires</a>, <a href="#pkg_sub_rpm-summary">summary</a>, <a href="#pkg_sub_rpm-version">version</a>)
 </pre>
 
 Define a sub RPM to be built as part of a parent RPM
@@ -201,6 +205,7 @@ RPM that will be built as part of a larger RPM defined by a `pkg_rpm` instance.
 | <a id="pkg_sub_rpm-obsoletes"></a>obsoletes |  List of RPM capability expressions that this package obsoletes   | List of strings | optional |  `[]`  |
 | <a id="pkg_sub_rpm-package_name"></a>package_name |  name of the subrpm   | String | optional |  `""`  |
 | <a id="pkg_sub_rpm-post_scriptlet"></a>post_scriptlet |  RPM `%post` scriplet for this subrpm   | String | optional |  `""`  |
+| <a id="pkg_sub_rpm-postun_scriptlet"></a>postun_scriptlet |  RPM `%postun` scriplet for this subrpm   | String | optional |  `""`  |
 | <a id="pkg_sub_rpm-provides"></a>provides |  List of RPM capability expressions that this package provides   | List of strings | optional |  `[]`  |
 | <a id="pkg_sub_rpm-requires"></a>requires |  List of RPM capability expressions that this package requires   | List of strings | optional |  `[]`  |
 | <a id="pkg_sub_rpm-summary"></a>summary |  Sub RPM `Summary` tag   | String | optional |  `""`  |
@@ -227,6 +232,8 @@ find_system_rpmbuild(name="rules_pkg_rpmbuild")
 ## pkg_rpm
 
 <pre>
+load("@rules_pkg//pkg:rpm_pfg.bzl", "pkg_rpm")
+
 pkg_rpm(<a href="#pkg_rpm-name">name</a>, <a href="#pkg_rpm-srcs">srcs</a>, <a href="#pkg_rpm-architecture">architecture</a>, <a href="#pkg_rpm-binary_payload_compression">binary_payload_compression</a>, <a href="#pkg_rpm-changelog">changelog</a>, <a href="#pkg_rpm-conflicts">conflicts</a>, <a href="#pkg_rpm-debug">debug</a>,
         <a href="#pkg_rpm-debuginfo">debuginfo</a>, <a href="#pkg_rpm-defines">defines</a>, <a href="#pkg_rpm-description">description</a>, <a href="#pkg_rpm-description_file">description_file</a>, <a href="#pkg_rpm-epoch">epoch</a>, <a href="#pkg_rpm-group">group</a>, <a href="#pkg_rpm-license">license</a>, <a href="#pkg_rpm-obsoletes">obsoletes</a>,
         <a href="#pkg_rpm-package_file_name">package_file_name</a>, <a href="#pkg_rpm-package_name">package_name</a>, <a href="#pkg_rpm-package_variables">package_variables</a>, <a href="#pkg_rpm-post_scriptlet">post_scriptlet</a>, <a href="#pkg_rpm-post_scriptlet_file">post_scriptlet_file</a>,
@@ -332,12 +339,14 @@ Rules for making .tar files.
 ## pkg_tar
 
 <pre>
+load("@rules_pkg//pkg/private/tar:tar.bzl", "pkg_tar")
+
 pkg_tar(<a href="#pkg_tar-name">name</a>, <a href="#pkg_tar-deps">deps</a>, <a href="#pkg_tar-srcs">srcs</a>, <a href="#pkg_tar-out">out</a>, <a href="#pkg_tar-allow_duplicates_from_deps">allow_duplicates_from_deps</a>,
-             <a href="#pkg_tar-allow_duplicates_with_different_content">allow_duplicates_with_different_content</a>, <a href="#pkg_tar-compressor">compressor</a>, <a href="#pkg_tar-compressor_args">compressor_args</a>, <a href="#pkg_tar-create_parents">create_parents</a>,
-             <a href="#pkg_tar-empty_dirs">empty_dirs</a>, <a href="#pkg_tar-empty_files">empty_files</a>, <a href="#pkg_tar-extension">extension</a>, <a href="#pkg_tar-files">files</a>, <a href="#pkg_tar-include_runfiles">include_runfiles</a>, <a href="#pkg_tar-mode">mode</a>, <a href="#pkg_tar-modes">modes</a>, <a href="#pkg_tar-mtime">mtime</a>, <a href="#pkg_tar-owner">owner</a>,
-             <a href="#pkg_tar-ownername">ownername</a>, <a href="#pkg_tar-ownernames">ownernames</a>, <a href="#pkg_tar-owners">owners</a>, <a href="#pkg_tar-package_dir">package_dir</a>, <a href="#pkg_tar-package_dir_file">package_dir_file</a>, <a href="#pkg_tar-package_file_name">package_file_name</a>,
-             <a href="#pkg_tar-package_variables">package_variables</a>, <a href="#pkg_tar-portable_mtime">portable_mtime</a>, <a href="#pkg_tar-private_stamp_detect">private_stamp_detect</a>, <a href="#pkg_tar-remap_paths">remap_paths</a>, <a href="#pkg_tar-stamp">stamp</a>,
-             <a href="#pkg_tar-strip_prefix">strip_prefix</a>, <a href="#pkg_tar-symlinks">symlinks</a>)
+             <a href="#pkg_tar-allow_duplicates_with_different_content">allow_duplicates_with_different_content</a>, <a href="#pkg_tar-compression_level">compression_level</a>, <a href="#pkg_tar-compressor">compressor</a>, <a href="#pkg_tar-compressor_args">compressor_args</a>,
+             <a href="#pkg_tar-create_parents">create_parents</a>, <a href="#pkg_tar-empty_dirs">empty_dirs</a>, <a href="#pkg_tar-empty_files">empty_files</a>, <a href="#pkg_tar-extension">extension</a>, <a href="#pkg_tar-files">files</a>, <a href="#pkg_tar-include_runfiles">include_runfiles</a>, <a href="#pkg_tar-mode">mode</a>, <a href="#pkg_tar-modes">modes</a>,
+             <a href="#pkg_tar-mtime">mtime</a>, <a href="#pkg_tar-owner">owner</a>, <a href="#pkg_tar-ownername">ownername</a>, <a href="#pkg_tar-ownernames">ownernames</a>, <a href="#pkg_tar-owners">owners</a>, <a href="#pkg_tar-package_dir">package_dir</a>, <a href="#pkg_tar-package_dir_file">package_dir_file</a>,
+             <a href="#pkg_tar-package_file_name">package_file_name</a>, <a href="#pkg_tar-package_variables">package_variables</a>, <a href="#pkg_tar-portable_mtime">portable_mtime</a>, <a href="#pkg_tar-private_stamp_detect">private_stamp_detect</a>, <a href="#pkg_tar-remap_paths">remap_paths</a>,
+             <a href="#pkg_tar-stamp">stamp</a>, <a href="#pkg_tar-strip_prefix">strip_prefix</a>, <a href="#pkg_tar-symlinks">symlinks</a>)
 </pre>
 
 
@@ -353,6 +362,7 @@ pkg_tar(<a href="#pkg_tar-name">name</a>, <a href="#pkg_tar-deps">deps</a>, <a h
 | <a id="pkg_tar-out"></a>out |  -   | <a href="https://bazel.build/concepts/labels">Label</a> | required |  |
 | <a id="pkg_tar-allow_duplicates_from_deps"></a>allow_duplicates_from_deps |  -   | Boolean | optional |  `False`  |
 | <a id="pkg_tar-allow_duplicates_with_different_content"></a>allow_duplicates_with_different_content |  If true, will allow you to reference multiple pkg_* which conflict (writing different content or metadata to the same destination). Such behaviour is always incorrect, but we provide a flag to support it in case old builds were accidentally doing it. Never explicitly set this to true for new code.   | Boolean | optional |  `True`  |
+| <a id="pkg_tar-compression_level"></a>compression_level |  Specify the numeric compression level in gzip mode; may be 0-9 or -1 (default to 6).   | Integer | optional |  `-1`  |
 | <a id="pkg_tar-compressor"></a>compressor |  External tool which can compress the archive.   | <a href="https://bazel.build/concepts/labels">Label</a> | optional |  `None`  |
 | <a id="pkg_tar-compressor_args"></a>compressor_args |  Arg list for `compressor`.   | String | optional |  `""`  |
 | <a id="pkg_tar-create_parents"></a>create_parents |  -   | Boolean | optional |  `True`  |
@@ -390,6 +400,8 @@ Zip archive creation rule and associated logic.
 ## pkg_zip
 
 <pre>
+load("@rules_pkg//pkg/private/zip:zip.bzl", "pkg_zip")
+
 pkg_zip(<a href="#pkg_zip-name">name</a>, <a href="#pkg_zip-srcs">srcs</a>, <a href="#pkg_zip-out">out</a>, <a href="#pkg_zip-allow_duplicates_with_different_content">allow_duplicates_with_different_content</a>, <a href="#pkg_zip-compression_level">compression_level</a>,
              <a href="#pkg_zip-compression_type">compression_type</a>, <a href="#pkg_zip-include_runfiles">include_runfiles</a>, <a href="#pkg_zip-mode">mode</a>, <a href="#pkg_zip-package_dir">package_dir</a>, <a href="#pkg_zip-package_file_name">package_file_name</a>,
              <a href="#pkg_zip-package_variables">package_variables</a>, <a href="#pkg_zip-private_stamp_detect">private_stamp_detect</a>, <a href="#pkg_zip-stamp">stamp</a>, <a href="#pkg_zip-strip_prefix">strip_prefix</a>, <a href="#pkg_zip-timestamp">timestamp</a>)
@@ -441,6 +453,8 @@ here.
 ## filter_directory
 
 <pre>
+load("@rules_pkg//pkg:mappings.bzl", "filter_directory")
+
 filter_directory(<a href="#filter_directory-name">name</a>, <a href="#filter_directory-src">src</a>, <a href="#filter_directory-excludes">excludes</a>, <a href="#filter_directory-outdir_name">outdir_name</a>, <a href="#filter_directory-prefix">prefix</a>, <a href="#filter_directory-renames">renames</a>, <a href="#filter_directory-strip_prefix">strip_prefix</a>)
 </pre>
 
@@ -490,6 +504,8 @@ will fail.  See the individual attributes for details.
 ## pkg_filegroup
 
 <pre>
+load("@rules_pkg//pkg:mappings.bzl", "pkg_filegroup")
+
 pkg_filegroup(<a href="#pkg_filegroup-name">name</a>, <a href="#pkg_filegroup-srcs">srcs</a>, <a href="#pkg_filegroup-prefix">prefix</a>)
 </pre>
 
@@ -514,6 +530,8 @@ such as a prefix or a human-readable category.
 ## pkg_files
 
 <pre>
+load("@rules_pkg//pkg:mappings.bzl", "pkg_files")
+
 pkg_files(<a href="#pkg_files-name">name</a>, <a href="#pkg_files-srcs">srcs</a>, <a href="#pkg_files-attributes">attributes</a>, <a href="#pkg_files-excludes">excludes</a>, <a href="#pkg_files-include_runfiles">include_runfiles</a>, <a href="#pkg_files-prefix">prefix</a>, <a href="#pkg_files-renames">renames</a>, <a href="#pkg_files-strip_prefix">strip_prefix</a>)
 </pre>
 
@@ -550,6 +568,8 @@ special requirements.  Consult `pkg_mkdirs` for more details.
 ## pkg_mkdirs
 
 <pre>
+load("@rules_pkg//pkg:mappings.bzl", "pkg_mkdirs")
+
 pkg_mkdirs(<a href="#pkg_mkdirs-name">name</a>, <a href="#pkg_mkdirs-attributes">attributes</a>, <a href="#pkg_mkdirs-dirs">dirs</a>)
 </pre>
 
@@ -584,6 +604,8 @@ distribution's documentation for more details.
 ## pkg_mklink_impl
 
 <pre>
+load("@rules_pkg//pkg:mappings.bzl", "pkg_mklink_impl")
+
 pkg_mklink_impl(<a href="#pkg_mklink_impl-name">name</a>, <a href="#pkg_mklink_impl-attributes">attributes</a>, <a href="#pkg_mklink_impl-link_name">link_name</a>, <a href="#pkg_mklink_impl-target">target</a>)
 </pre>
 
@@ -610,7 +632,9 @@ package, or otherwise left dangling.
 ## pkg_attributes
 
 <pre>
-pkg_attributes(<a href="#pkg_attributes-mode">mode</a>, <a href="#pkg_attributes-user">user</a>, <a href="#pkg_attributes-group">group</a>, <a href="#pkg_attributes-uid">uid</a>, <a href="#pkg_attributes-gid">gid</a>, <a href="#pkg_attributes-kwargs">kwargs</a>)
+load("@rules_pkg//pkg:mappings.bzl", "pkg_attributes")
+
+pkg_attributes(<a href="#pkg_attributes-mode">mode</a>, <a href="#pkg_attributes-user">user</a>, <a href="#pkg_attributes-group">group</a>, <a href="#pkg_attributes-uid">uid</a>, <a href="#pkg_attributes-gid">gid</a>, <a href="#pkg_attributes-kwargs">**kwargs</a>)
 </pre>
 
 Format attributes for use in package mapping rules.
@@ -651,7 +675,9 @@ A value usable in the "attributes" attribute in package mapping rules.
 ## pkg_mklink
 
 <pre>
-pkg_mklink(<a href="#pkg_mklink-name">name</a>, <a href="#pkg_mklink-link_name">link_name</a>, <a href="#pkg_mklink-target">target</a>, <a href="#pkg_mklink-attributes">attributes</a>, <a href="#pkg_mklink-src">src</a>, <a href="#pkg_mklink-kwargs">kwargs</a>)
+load("@rules_pkg//pkg:mappings.bzl", "pkg_mklink")
+
+pkg_mklink(<a href="#pkg_mklink-name">name</a>, <a href="#pkg_mklink-link_name">link_name</a>, <a href="#pkg_mklink-target">target</a>, <a href="#pkg_mklink-attributes">attributes</a>, <a href="#pkg_mklink-src">src</a>, <a href="#pkg_mklink-kwargs">**kwargs</a>)
 </pre>
 
 Create a symlink.
@@ -677,6 +703,8 @@ Wraps [pkg_mklink_impl](#pkg_mklink_impl)
 ## strip_prefix.files_only
 
 <pre>
+load("@rules_pkg//pkg:mappings.bzl", "strip_prefix")
+
 strip_prefix.files_only()
 </pre>
 
@@ -689,6 +717,8 @@ strip_prefix.files_only()
 ## strip_prefix.from_pkg
 
 <pre>
+load("@rules_pkg//pkg:mappings.bzl", "strip_prefix")
+
 strip_prefix.from_pkg(<a href="#strip_prefix.from_pkg-path">path</a>)
 </pre>
 
@@ -707,6 +737,8 @@ strip_prefix.from_pkg(<a href="#strip_prefix.from_pkg-path">path</a>)
 ## strip_prefix.from_root
 
 <pre>
+load("@rules_pkg//pkg:mappings.bzl", "strip_prefix")
+
 strip_prefix.from_root(<a href="#strip_prefix.from_root-path">path</a>)
 </pre>
 
@@ -741,6 +773,8 @@ toolchain add the following stanza to WORKSPACE:
 ## pkg_rpm
 
 <pre>
+load("@rules_pkg//pkg/legacy:rpm.bzl", "pkg_rpm")
+
 pkg_rpm(<a href="#pkg_rpm-name">name</a>, <a href="#pkg_rpm-data">data</a>, <a href="#pkg_rpm-architecture">architecture</a>, <a href="#pkg_rpm-changelog">changelog</a>, <a href="#pkg_rpm-debug">debug</a>, <a href="#pkg_rpm-release">release</a>, <a href="#pkg_rpm-release_file">release_file</a>, <a href="#pkg_rpm-rpmbuild_path">rpmbuild_path</a>,
         <a href="#pkg_rpm-source_date_epoch">source_date_epoch</a>, <a href="#pkg_rpm-source_date_epoch_file">source_date_epoch_file</a>, <a href="#pkg_rpm-spec_file">spec_file</a>, <a href="#pkg_rpm-version">version</a>, <a href="#pkg_rpm-version_file">version_file</a>)
 </pre>

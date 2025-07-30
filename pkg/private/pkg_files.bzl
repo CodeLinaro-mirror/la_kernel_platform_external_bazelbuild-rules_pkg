@@ -394,6 +394,7 @@ def add_from_default_info(
       data_path: path to package
       data_path_without_prefix: path to the package after prefix stripping
       include_runfiles: Include runfiles
+      workspace_name: name of the main workspace
     """
     if not DefaultInfo in src:
         return
@@ -544,7 +545,7 @@ def add_single_file(mapping_context, dest_path, src, origin, mode = None, user =
 def add_symlink(mapping_context, dest_path, src, origin):
     """Add a symlink to the content map.
 
-    TODO(aiuto): This is a vestage left from the pkg_tar use.  We could
+    TODO(aiuto): This is a vestige left from the pkg_tar use.  We could
     converge code by having pkg_tar be a macro that expands symlinks to
     pkg_symlink targets and srcs them in.
 
