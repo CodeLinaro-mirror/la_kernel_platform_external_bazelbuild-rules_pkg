@@ -31,20 +31,9 @@ filegroup(
     srcs = [
         "BUILD",
     ] + glob([
-        "*.bzl",
         "*.py",
     ]),
     visibility = ["//distro:__pkg__"],
-)
-
-exports_files(
-    glob([
-        "*.bzl",
-    ]),
-    visibility = [
-        "//distro:__pkg__",
-        "//doc_build:__pkg__",
-    ],
 )
 
 # pairs of rule name and the source file to get it from
@@ -80,7 +69,10 @@ genrule(
         symbol_names = [
             rule,
         ],
-        deps = [":rules_pkg_lib"],
+        deps = [
+            ":rules_pkg_lib",
+            "//toolchains/rpm:standard_package",
+        ],
     )
     for rule, src in ORDER
     if src
