@@ -14,6 +14,7 @@ third_party {
   identifier {
     type: "Git"
     value: "https://github.com/bazelbuild/rules_pkg"
-    version: "1.1.0"
+    version: "cd7e10846f97b5cb9b184c87b4ceaf2f1b4b5d3f"
+    closest_version: "1.1.0"
   }
 }
